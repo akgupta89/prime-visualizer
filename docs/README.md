@@ -6,7 +6,7 @@ The Beauty of Primes is a prime number visualization app built with React and Ca
 
 Prime numbers are intricately fascinating. They can only be divided evenly by the numbers 1 and themselves, they are infinite, no formula exists to completely and reasonably calculate them, and these numbers form the basis of modern cryptography. This app takes a list of primes and draws them in 2D space as vectors.
 
-<img src="public/example.svg">
+<img src="example.svg">
 
 The prime number serves as the magnitude, and the angle delta provides a direction. By lining up the arrows from head to tail, beautiful patterns [start to emerge](https://akgupta89.github.io/prime-visualizer/).
 

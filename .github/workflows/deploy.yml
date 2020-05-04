@@ -1,27 +1,33 @@
-name: Deploy
+name: Deploy CI
+
 on:
   push:
     branches:
       - master
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [8.x, 10.x, 12.x]
+
     steps:
-      - uses: actions/checkout@v1
-      - name: Use Node.js ${{ matrix.node-version }}
+      - uses: actions/checkout@v2
+      - name: Use Node.js
         uses: actions/setup-node@v1
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: "12.x"
       - name: Install Packages
-        working-directory: prime_visualizer
-        run: npm install
-      - name: Deploy to GH Pages
-        working-directory: prime_visualizer
-        run: |
-          git config --global user.email "${{ secrets.EMAIL }}"
-          git config --global user.name "${{ secrets.USERNAME }}"
-          git remote set-url origin https://${{ secrets.GITHUB_TOKEN }}@github.com/akgupta89/akgupta89.github.io>.git
+        run: npm ci
+      - name: Build Static Pages
+        run: | 
           npm run deploy
+          mkdir deploy
+          mv ./build ./prime-visualizer
+          mv ./prime-visualizer ./deploy 
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          personal_token: ${{ secrets.TOKEN }}
+          external_repository: akgupta89/akgupta89.github.io
+          publish_dir: ./deploy
+          publish_branch: master
+          keep_files: true

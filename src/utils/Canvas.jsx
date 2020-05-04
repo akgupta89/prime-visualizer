@@ -14,7 +14,7 @@ export const pointerEvent = function (e, setCanvasState) {
   const idx = pointers.findIndex((pointer) => pointer.id === e.pointerId);
 
   if (e.type === "pointermove" && idx >= 0) {
-    if (pointers.length == 2) {
+    if (pointers.length === 2) {
       const currentDistance = Math.abs(pointers[0].x - pointers[1].x);
       if (previousDistance > 0) {
         e.deltaY = currentDistance - previousDistance;
