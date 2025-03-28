@@ -191,7 +191,7 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
 
     // Load font
     const fontLoader = new FontLoader();
-    fontLoader.load('/fonts/helvetiker_regular.typeface.json', (font) => {
+    fontLoader.load('fonts/helvetiker_regular.typeface.json', (font) => {
       fontRef.current = font;
       
       // Mark as initialized and force a render
