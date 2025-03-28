@@ -22,7 +22,7 @@ jobs:
 
       - name: Build Static Pages
         run: |
-          npm run deploy
+          npm run build
           mkdir deploy
           mv ./out ./prime-visualizer
           mv ./prime-visualizer ./deploy
