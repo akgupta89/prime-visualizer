@@ -8,7 +8,7 @@
   "homepage": "https://akgupta89.github.io/prime-visualizer",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && next export -o prime-visualizer",
     "start": "next start",
     "lint": "next lint",
     "predeploy": "npm run build",

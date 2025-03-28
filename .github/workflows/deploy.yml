@@ -11,18 +11,21 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 18
+
       - name: Install Packages
         run: npm ci
+
       - name: Build Static Pages
         run: |
           npm run deploy
           mkdir deploy
-          mv ./build ./prime-visualizer
           mv ./prime-visualizer ./deploy
+
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         with:
