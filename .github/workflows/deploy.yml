@@ -24,6 +24,7 @@ jobs:
         run: |
           npm run deploy
           mkdir deploy
+          mv ./out ./prime-visualizer
           mv ./prime-visualizer ./deploy
 
       - name: Deploy
