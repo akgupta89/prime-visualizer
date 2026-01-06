@@ -28,6 +28,202 @@ interface PredictionAccuracy {
   accuracy: number;
 }
 
+// Helper function to predict the next point in a spiral arm
+const predictNextPoint = (
+  points: { x: number; y: number; z: number; prime: number; index: number }[],
+  stepsAhead: number = 1
+): { x: number; y: number; z: number; predictedPrime: number } | null => {
+  if (points.length < 3) return null;
+
+  const n = points.length;
+  const p1 = points[n - 3];
+  const p2 = points[n - 2];
+  const p3 = points[n - 1];
+
+  // Calculate velocity vectors
+  const v1 = { x: p2.x - p1.x, y: p2.y - p1.y };
+  const v2 = { x: p3.x - p2.x, y: p3.y - p2.y };
+
+  // Calculate acceleration (change in velocity)
+  const accel = { x: v2.x - v1.x, y: v2.y - v1.y };
+
+  // Predict next position using kinematic equations
+  let nextX = p3.x;
+  let nextY = p3.y;
+  const currentVel = { ...v2 };
+
+  for (let i = 0; i < stepsAhead; i++) {
+    currentVel.x += accel.x;
+    currentVel.y += accel.y;
+    nextX += currentVel.x;
+    nextY += currentVel.y;
+  }
+
+  // Predict prime value based on pattern
+  const primeDiff1 = p2.prime - p1.prime;
+  const primeDiff2 = p3.prime - p2.prime;
+  const primeAccel = primeDiff2 - primeDiff1;
+
+  let predictedPrime = p3.prime;
+  let currentPrimeDiff = primeDiff2;
+
+  for (let i = 0; i < stepsAhead; i++) {
+    currentPrimeDiff += primeAccel;
+    predictedPrime += currentPrimeDiff;
+  }
+
+  return {
+    x: nextX,
+    y: nextY,
+    z: 0,
+    predictedPrime: Math.round(predictedPrime)
+  };
+};
+
+// Helper function to detect spiral arms
+const detectSpiralArms = (primes: number[], angleDelta: number): SpiralArm[] => {
+  if (primes.length < 10) return [];
+
+  // Map primes to their positions
+  const primePositions = primes.map((prime, index) => {
+    const angle = index * (angleDelta * Math.PI / 180);
+    const radius = 0.01 * prime;
+    return {
+      prime,
+      index,
+      x: radius * Math.cos(angle),
+      y: radius * Math.sin(angle),
+      z: 0,
+      angle,
+      radius
+    };
+  });
+
+  // Detect arms by looking for linear patterns
+  const arms: SpiralArm[] = [];
+  const minArmLength = 5;
+  const maxAngleDiff = 0.3; // Maximum angle difference to consider points part of same arm
+
+  // Use a sliding window approach to find consistent linear patterns
+  for (let i = 0; i < primePositions.length - minArmLength; i += Math.floor(minArmLength / 2)) {
+    const arm: SpiralArm = {
+      points: [],
+      predictions: []
+    };
+
+    // Start with initial points
+    arm.points.push(primePositions[i]);
+
+    // Look for points that continue the pattern
+    for (let j = i + 1; j < primePositions.length; j++) {
+      if (arm.points.length >= 2) {
+        const p1 = arm.points[arm.points.length - 2];
+        const p2 = arm.points[arm.points.length - 1];
+        const p3 = primePositions[j];
+
+        // Calculate the angle of the line between consecutive points
+        const angle1 = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+        const angle2 = Math.atan2(p3.y - p2.y, p3.x - p2.x);
+
+        // Normalize angle difference to [-π, π]
+        let angleDiff = angle2 - angle1;
+        while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+        while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+
+        // If angle is consistent, add to arm
+        if (Math.abs(angleDiff) < maxAngleDiff) {
+          arm.points.push(primePositions[j]);
+        }
+      } else {
+        // For first few points, just add them
+        arm.points.push(primePositions[j]);
+      }
+    }
+
+    // Only keep arms with sufficient length
+    if (arm.points.length >= minArmLength) {
+      // Generate predictions for this arm
+      const numPredictions = 3;
+      for (let k = 0; k < numPredictions; k++) {
+        const prediction = predictNextPoint(arm.points, k + 1);
+        if (prediction) {
+          arm.predictions.push(prediction);
+        }
+      }
+      arms.push(arm);
+    }
+  }
+
+  return arms;
+};
+
+// Helper function to calculate prediction accuracy
+const calculateAccuracy = (
+  arms: SpiralArm[],
+  allPrimes: number[],
+  angleDelta: number
+): PredictionAccuracy => {
+  let totalPredictions = 0;
+  let correctPredictions = 0;
+  let totalDistance = 0;
+
+  // Map all primes to positions for comparison
+  const primePositionMap = new Map<number, { x: number; y: number }>();
+  allPrimes.forEach((prime, index) => {
+    const angle = index * (angleDelta * Math.PI / 180);
+    const radius = 0.01 * prime;
+    primePositionMap.set(prime, {
+      x: radius * Math.cos(angle),
+      y: radius * Math.sin(angle)
+    });
+  });
+
+  arms.forEach(arm => {
+    arm.predictions.forEach(prediction => {
+      totalPredictions++;
+
+      // Check if the predicted prime exists
+      const actualPos = primePositionMap.get(prediction.predictedPrime);
+      if (actualPos) {
+        const distance = Math.sqrt(
+          Math.pow(prediction.x - actualPos.x, 2) +
+          Math.pow(prediction.y - actualPos.y, 2)
+        );
+
+        totalDistance += distance;
+
+        // Consider it correct if within a threshold
+        if (distance < 0.5) {
+          correctPredictions++;
+        }
+      } else {
+        // If prime doesn't exist, find closest actual prime position
+        let minDistance = Infinity;
+        primePositionMap.forEach((pos) => {
+          const distance = Math.sqrt(
+            Math.pow(prediction.x - pos.x, 2) +
+            Math.pow(prediction.y - pos.y, 2)
+          );
+          if (distance < minDistance) {
+            minDistance = distance;
+          }
+        });
+        totalDistance += minDistance;
+      }
+    });
+  });
+
+  const accuracy = totalPredictions > 0 ? (correctPredictions / totalPredictions) * 100 : 0;
+  const averageDistance = totalPredictions > 0 ? totalDistance / totalPredictions : 0;
+
+  return {
+    totalPredictions,
+    correctPredictions,
+    averageDistance,
+    accuracy
+  };
+};
+
 const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
   width,
   height,
@@ -53,202 +249,6 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
   const predictionGroupRef = useRef<THREE.Group | null>(null);
   const accuracyRef = useRef<PredictionAccuracy | null>(null);
   const [accuracyState, setAccuracyState] = React.useState<PredictionAccuracy | null>(null);
-
-  // Helper function to detect spiral arms
-  const detectSpiralArms = (primes: number[], angleDelta: number): SpiralArm[] => {
-    if (primes.length < 10) return [];
-
-    // Map primes to their positions
-    const primePositions = primes.map((prime, index) => {
-      const angle = index * (angleDelta * Math.PI / 180);
-      const radius = 0.01 * prime;
-      return {
-        prime,
-        index,
-        x: radius * Math.cos(angle),
-        y: radius * Math.sin(angle),
-        z: 0,
-        angle,
-        radius
-      };
-    });
-
-    // Detect arms by looking for linear patterns
-    const arms: SpiralArm[] = [];
-    const minArmLength = 5;
-    const maxAngleDiff = 0.3; // Maximum angle difference to consider points part of same arm
-
-    // Use a sliding window approach to find consistent linear patterns
-    for (let i = 0; i < primePositions.length - minArmLength; i += Math.floor(minArmLength / 2)) {
-      const arm: SpiralArm = {
-        points: [],
-        predictions: []
-      };
-
-      // Start with initial points
-      arm.points.push(primePositions[i]);
-
-      // Look for points that continue the pattern
-      for (let j = i + 1; j < primePositions.length; j++) {
-        if (arm.points.length >= 2) {
-          const p1 = arm.points[arm.points.length - 2];
-          const p2 = arm.points[arm.points.length - 1];
-          const p3 = primePositions[j];
-
-          // Calculate the angle of the line between consecutive points
-          const angle1 = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-          const angle2 = Math.atan2(p3.y - p2.y, p3.x - p2.x);
-
-          // Normalize angle difference to [-π, π]
-          let angleDiff = angle2 - angle1;
-          while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-          while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-
-          // If angle is consistent, add to arm
-          if (Math.abs(angleDiff) < maxAngleDiff) {
-            arm.points.push(primePositions[j]);
-          }
-        } else {
-          // For first few points, just add them
-          arm.points.push(primePositions[j]);
-        }
-      }
-
-      // Only keep arms with sufficient length
-      if (arm.points.length >= minArmLength) {
-        // Generate predictions for this arm
-        const numPredictions = 3;
-        for (let k = 0; k < numPredictions; k++) {
-          const prediction = predictNextPoint(arm.points, k + 1);
-          if (prediction) {
-            arm.predictions.push(prediction);
-          }
-        }
-        arms.push(arm);
-      }
-    }
-
-    return arms;
-  };
-
-  // Helper function to predict the next point in a spiral arm
-  const predictNextPoint = (
-    points: { x: number; y: number; z: number; prime: number; index: number }[],
-    stepsAhead: number = 1
-  ): { x: number; y: number; z: number; predictedPrime: number } | null => {
-    if (points.length < 3) return null;
-
-    const n = points.length;
-    const p1 = points[n - 3];
-    const p2 = points[n - 2];
-    const p3 = points[n - 1];
-
-    // Calculate velocity vectors
-    const v1 = { x: p2.x - p1.x, y: p2.y - p1.y };
-    const v2 = { x: p3.x - p2.x, y: p3.y - p2.y };
-
-    // Calculate acceleration (change in velocity)
-    const accel = { x: v2.x - v1.x, y: v2.y - v1.y };
-
-    // Predict next position using kinematic equations
-    let nextX = p3.x;
-    let nextY = p3.y;
-    const currentVel = { ...v2 };
-
-    for (let i = 0; i < stepsAhead; i++) {
-      currentVel.x += accel.x;
-      currentVel.y += accel.y;
-      nextX += currentVel.x;
-      nextY += currentVel.y;
-    }
-
-    // Predict prime value based on pattern
-    const primeDiff1 = p2.prime - p1.prime;
-    const primeDiff2 = p3.prime - p2.prime;
-    const primeAccel = primeDiff2 - primeDiff1;
-
-    let predictedPrime = p3.prime;
-    let currentPrimeDiff = primeDiff2;
-
-    for (let i = 0; i < stepsAhead; i++) {
-      currentPrimeDiff += primeAccel;
-      predictedPrime += currentPrimeDiff;
-    }
-
-    return {
-      x: nextX,
-      y: nextY,
-      z: 0,
-      predictedPrime: Math.round(predictedPrime)
-    };
-  };
-
-  // Helper function to calculate prediction accuracy
-  const calculateAccuracy = (
-    arms: SpiralArm[],
-    allPrimes: number[],
-    angleDelta: number
-  ): PredictionAccuracy => {
-    let totalPredictions = 0;
-    let correctPredictions = 0;
-    let totalDistance = 0;
-
-    // Map all primes to positions for comparison
-    const primePositionMap = new Map<number, { x: number; y: number }>();
-    allPrimes.forEach((prime, index) => {
-      const angle = index * (angleDelta * Math.PI / 180);
-      const radius = 0.01 * prime;
-      primePositionMap.set(prime, {
-        x: radius * Math.cos(angle),
-        y: radius * Math.sin(angle)
-      });
-    });
-
-    arms.forEach(arm => {
-      arm.predictions.forEach(prediction => {
-        totalPredictions++;
-
-        // Check if the predicted prime exists
-        const actualPos = primePositionMap.get(prediction.predictedPrime);
-        if (actualPos) {
-          const distance = Math.sqrt(
-            Math.pow(prediction.x - actualPos.x, 2) +
-            Math.pow(prediction.y - actualPos.y, 2)
-          );
-
-          totalDistance += distance;
-
-          // Consider it correct if within a threshold
-          if (distance < 0.5) {
-            correctPredictions++;
-          }
-        } else {
-          // If prime doesn't exist, find closest actual prime position
-          let minDistance = Infinity;
-          primePositionMap.forEach((pos) => {
-            const distance = Math.sqrt(
-              Math.pow(prediction.x - pos.x, 2) +
-              Math.pow(prediction.y - pos.y, 2)
-            );
-            if (distance < minDistance) {
-              minDistance = distance;
-            }
-          });
-          totalDistance += minDistance;
-        }
-      });
-    });
-
-    const accuracy = totalPredictions > 0 ? (correctPredictions / totalPredictions) * 100 : 0;
-    const averageDistance = totalPredictions > 0 ? totalDistance / totalPredictions : 0;
-
-    return {
-      totalPredictions,
-      correctPredictions,
-      averageDistance,
-      accuracy
-    };
-  };
 
   // Initialize Three.js
   useEffect(() => {
