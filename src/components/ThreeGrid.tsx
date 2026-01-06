@@ -16,6 +16,7 @@ const ThreeGrid: React.FC<ThreeGridProps> = ({ width, height }) => {
   const [, setZoom] = useState(1);
   const [angleDelta, setAngleDelta] = useState(36);
   const [showConnector, setShowConnector] = useState(false);
+  const [showPredictions, setShowPredictions] = useState(false);
   const [primes, setPrimes] = useState<number[]>([]);
   const controlsRef = useRef<OrbitControls | null>(null);
   
@@ -61,6 +62,11 @@ const ThreeGrid: React.FC<ThreeGridProps> = ({ width, height }) => {
     setShowConnector(e.target.checked);
   };
 
+  // Handle predictions toggle
+  const handleTogglePredictions = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setShowPredictions(e.target.checked);
+  };
+
   if (isLoading) {
     return <div>Loading...</div>;
   }
@@ -72,11 +78,13 @@ const ThreeGrid: React.FC<ThreeGridProps> = ({ width, height }) => {
         isLoading={isLoading}
         angleDelta={angleDelta}
         showConnector={showConnector}
+        showPredictions={showPredictions}
         onPrimeCountChange={handlePrimeCountChange}
         onAngleDeltaChange={handleAngleDeltaChange}
         onUpdatePrimes={(count) => setPrimeCount(count)}
         onResetCamera={handleResetCamera}
         onToggleConnector={handleToggleConnector}
+        onTogglePredictions={handleTogglePredictions}
       />
       <PrimeVisualization
         width={width}
@@ -84,6 +92,7 @@ const ThreeGrid: React.FC<ThreeGridProps> = ({ width, height }) => {
         primes={primes}
         angleDelta={angleDelta}
         showConnector={showConnector}
+        showPredictions={showPredictions}
         setPosition={setPosition}
         setZoom={setZoom}
         position={position}

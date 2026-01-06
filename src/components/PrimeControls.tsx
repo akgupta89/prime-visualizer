@@ -5,11 +5,13 @@ interface PrimeControlsProps {
   isLoading: boolean;
   angleDelta: number;
   showConnector: boolean;
+  showPredictions: boolean;
   onPrimeCountChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onAngleDeltaChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onUpdatePrimes: (count: number) => void;
   onResetCamera: () => void;
   onToggleConnector: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onTogglePredictions: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
 const PrimeControls: React.FC<PrimeControlsProps> = ({
@@ -17,11 +19,13 @@ const PrimeControls: React.FC<PrimeControlsProps> = ({
   isLoading,
   angleDelta,
   showConnector,
+  showPredictions,
   onPrimeCountChange,
   onAngleDeltaChange,
   onUpdatePrimes,
   onResetCamera,
-  onToggleConnector
+  onToggleConnector,
+  onTogglePredictions
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -164,7 +168,21 @@ const PrimeControls: React.FC<PrimeControlsProps> = ({
                 Link Primes
               </label>
             </div>
-            
+
+            <div className="flex items-center mt-2">
+              <input
+                id="showPredictions"
+                type="checkbox"
+                onChange={onTogglePredictions}
+                checked={showPredictions}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                disabled={isLoading}
+              />
+              <label htmlFor="showPredictions" className="ml-2 block text-sm text-gray-900">
+                Show Spiral Arm Predictions
+              </label>
+            </div>
+
             <div className="flex flex-col space-y-2">
               <button
                 onClick={onResetCamera}
