@@ -98,110 +98,67 @@ const detectSpiralArms = (primes: number[], angleDelta: number): SpiralArm[] => 
   const primePositions = primes.map((prime, index) => {
     const angle = index * (angleDelta * Math.PI / 180);
     const radius = 0.01 * prime;
+    const x = radius * Math.cos(angle);
+    const y = radius * Math.sin(angle);
+
+    // Calculate the angular position from origin (theta)
+    const theta = Math.atan2(y, x);
+
     return {
       prime,
       index,
-      x: radius * Math.cos(angle),
-      y: radius * Math.sin(angle),
+      x,
+      y,
       z: 0,
       angle,
-      radius
+      radius,
+      theta
     };
   });
 
-  // Group primes by angular sectors to find radial arms
-  const numSectors = 12; // Divide into 12 angular sectors
-  const sectorSize = (2 * Math.PI) / numSectors;
-  const sectors: Map<number, typeof primePositions> = new Map();
-
-  primePositions.forEach(pos => {
-    // Normalize angle to [0, 2π]
-    let normalizedAngle = pos.angle % (2 * Math.PI);
-    if (normalizedAngle < 0) normalizedAngle += 2 * Math.PI;
-
-    const sectorIndex = Math.floor(normalizedAngle / sectorSize);
-    if (!sectors.has(sectorIndex)) {
-      sectors.set(sectorIndex, []);
-    }
-    sectors.get(sectorIndex)!.push(pos);
-  });
-
+  // Group primes by their angular position (theta) - this creates radial arms
+  const angularTolerance = 0.1; // radians - points within this tolerance are on same arm
   const arms: SpiralArm[] = [];
-  const minArmLength = 5;
+  const used = new Set<number>();
 
-  // For each sector, find linear patterns (radial arms)
-  sectors.forEach((sectorPoints, sectorIndex) => {
-    if (sectorPoints.length < minArmLength) return;
+  primePositions.forEach((seed, seedIndex) => {
+    if (used.has(seedIndex)) return;
 
-    // Sort by radius to process from inside out
-    sectorPoints.sort((a, b) => a.radius - b.radius);
+    // Find all points at similar angular positions (same radial direction)
+    const armPoints: typeof primePositions = [];
 
-    // Find consecutive primes in this sector
-    let currentArm: typeof primePositions = [];
+    primePositions.forEach((point, pointIndex) => {
+      if (used.has(pointIndex)) return;
 
-    for (let i = 0; i < sectorPoints.length; i++) {
-      const point = sectorPoints[i];
+      // Calculate angular difference accounting for wrap-around
+      let thetaDiff = Math.abs(point.theta - seed.theta);
+      if (thetaDiff > Math.PI) thetaDiff = 2 * Math.PI - thetaDiff;
 
-      if (currentArm.length === 0) {
-        currentArm.push(point);
-      } else {
-        const lastPoint = currentArm[currentArm.length - 1];
-
-        // Check if this point continues the radial pattern
-        // Points should be roughly aligned and have increasing radius
-        const expectedDirection = {
-          x: lastPoint.x / lastPoint.radius,
-          y: lastPoint.y / lastPoint.radius
-        };
-        const actualDirection = {
-          x: point.x / point.radius,
-          y: point.y / point.radius
-        };
-
-        // Calculate angle between directions
-        const dotProduct = expectedDirection.x * actualDirection.x + expectedDirection.y * actualDirection.y;
-        const angleDiff = Math.acos(Math.max(-1, Math.min(1, dotProduct)));
-
-        if (angleDiff < 0.15) { // Very tight tolerance for radial alignment
-          currentArm.push(point);
-        } else {
-          // End current arm and start new one if current arm is long enough
-          if (currentArm.length >= minArmLength) {
-            const arm: SpiralArm = {
-              points: currentArm,
-              predictions: []
-            };
-
-            // Generate predictions
-            const numPredictions = 3;
-            for (let k = 0; k < numPredictions; k++) {
-              const prediction = predictNextPoint(currentArm, k + 1);
-              if (prediction) {
-                arm.predictions.push(prediction);
-              }
-            }
-            arms.push(arm);
-          }
-          // Start new arm with current point
-          currentArm = [point];
-        }
+      if (thetaDiff < angularTolerance) {
+        armPoints.push(point);
+        used.add(pointIndex);
       }
-    }
+    });
 
-    // Add final arm if long enough
-    if (currentArm.length >= minArmLength) {
+    // Only create arm if we have enough points
+    if (armPoints.length >= 5) {
+      // Sort by radius (inside to outside)
+      armPoints.sort((a, b) => a.radius - b.radius);
+
       const arm: SpiralArm = {
-        points: currentArm,
+        points: armPoints,
         predictions: []
       };
 
+      // Generate predictions
       const numPredictions = 3;
       for (let k = 0; k < numPredictions; k++) {
-        const prediction = predictNextPoint(currentArm, k + 1);
+        const prediction = predictNextPoint(armPoints, k + 1);
         if (prediction) {
           arm.predictions.push(prediction);
         }
       }
+
       arms.push(arm);
     }
   });
@@ -583,35 +540,39 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
         const armLine = new THREE.Line(armGeometry, armMaterial);
         predictionGroup.add(armLine);
 
-        // Draw predictions
-        arm.predictions.forEach((prediction, predIndex) => {
-          // Draw line from last point to prediction in red
-          const lastPoint = arm.points[arm.points.length - 1];
-          const predLinePoints = [
-            new THREE.Vector3(lastPoint.x, lastPoint.y, lastPoint.z),
-            new THREE.Vector3(prediction.x, prediction.y, prediction.z)
+        // Draw predictions as a continuous extension
+        if (arm.predictions.length > 0) {
+          const lastArmPoint = arm.points[arm.points.length - 1];
+
+          // Create continuous line from last arm point through all predictions
+          const predictionLinePoints = [
+            new THREE.Vector3(lastArmPoint.x, lastArmPoint.y, lastArmPoint.z),
+            ...arm.predictions.map(p => new THREE.Vector3(p.x, p.y, p.z))
           ];
-          const predLineGeometry = new THREE.BufferGeometry().setFromPoints(predLinePoints);
+
+          const predLineGeometry = new THREE.BufferGeometry().setFromPoints(predictionLinePoints);
           const predLineMaterial = new THREE.LineBasicMaterial({
             color: 0xff0000,
             linewidth: 2,
             transparent: true,
-            opacity: 0.7 - (predIndex * 0.2)
+            opacity: 0.7
           });
           const predLine = new THREE.Line(predLineGeometry, predLineMaterial);
           predictionGroup.add(predLine);
 
-          // Draw prediction sphere
-          const predSphereGeometry = new THREE.SphereGeometry(0.15, 16, 16);
-          const predSphereMaterial = new THREE.MeshBasicMaterial({
-            color: 0xff0000,
-            transparent: true,
-            opacity: 0.5 - (predIndex * 0.1)
+          // Draw prediction spheres
+          arm.predictions.forEach((prediction, predIndex) => {
+            const predSphereGeometry = new THREE.SphereGeometry(0.15, 16, 16);
+            const predSphereMaterial = new THREE.MeshBasicMaterial({
+              color: 0xff0000,
+              transparent: true,
+              opacity: 0.5 - (predIndex * 0.1)
+            });
+            const predSphere = new THREE.Mesh(predSphereGeometry, predSphereMaterial);
+            predSphere.position.set(prediction.x, prediction.y, prediction.z);
+            predictionGroup.add(predSphere);
           });
-          const predSphere = new THREE.Mesh(predSphereGeometry, predSphereMaterial);
-          predSphere.position.set(prediction.x, prediction.y, prediction.z);
-          predictionGroup.add(predSphere);
-        });
+        }
       });
 
       sceneRef.current.add(predictionGroup);
