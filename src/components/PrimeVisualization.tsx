@@ -604,8 +604,18 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
 
   // The createVisualization function should NOT contain hooks
   const createVisualization = () => {
-    if (!sceneRef.current || !fontRef.current || !primesRef.current || primes.length === 0) return;
-    
+    if (!sceneRef.current || !fontRef.current || !primesRef.current || primes.length === 0) {
+      console.log('createVisualization early return:', {
+        scene: !!sceneRef.current,
+        font: !!fontRef.current,
+        primesGroup: !!primesRef.current,
+        primesLength: primes.length
+      });
+      return;
+    }
+
+    console.log(`Creating visualization for ${primes.length} primes`);
+
     // Clear existing visualization
     while (primesRef.current.children.length > 0) {
       const child = primesRef.current.children[0];
