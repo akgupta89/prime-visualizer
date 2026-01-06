@@ -40,24 +40,34 @@ const predictNextPoint = (
   const p2 = points[n - 2];
   const p3 = points[n - 1];
 
-  // Calculate velocity vectors
-  const v1 = { x: p2.x - p1.x, y: p2.y - p1.y };
-  const v2 = { x: p3.x - p2.x, y: p3.y - p2.y };
+  // Calculate radii for the last 3 points
+  const r1 = Math.sqrt(p1.x * p1.x + p1.y * p1.y);
+  const r2 = Math.sqrt(p2.x * p2.x + p2.y * p2.y);
+  const r3 = Math.sqrt(p3.x * p3.x + p3.y * p3.y);
 
-  // Calculate acceleration (change in velocity)
-  const accel = { x: v2.x - v1.x, y: v2.y - v1.y };
+  // Calculate the radial direction (unit vector from origin to p3)
+  const dirX = p3.x / r3;
+  const dirY = p3.y / r3;
 
-  // Predict next position using kinematic equations
-  let nextX = p3.x;
-  let nextY = p3.y;
-  const currentVel = { ...v2 };
+  // Predict next radius using pattern of radial growth
+  const radiusDiff1 = r2 - r1;
+  const radiusDiff2 = r3 - r2;
+  const radiusAccel = radiusDiff2 - radiusDiff1;
+
+  let predictedRadius = r3;
+  let currentRadiusDiff = radiusDiff2;
 
   for (let i = 0; i < stepsAhead; i++) {
-    currentVel.x += accel.x;
-    currentVel.y += accel.y;
-    nextX += currentVel.x;
-    nextY += currentVel.y;
+    currentRadiusDiff += radiusAccel;
+    predictedRadius += currentRadiusDiff;
   }
+
+  // Ensure predicted radius doesn't become negative
+  if (predictedRadius < 0) predictedRadius = r3 + (stepsAhead * radiusDiff2);
+
+  // Project along the radial direction
+  const nextX = dirX * predictedRadius;
+  const nextY = dirY * predictedRadius;
 
   // Predict prime value based on pattern
   const primeDiff1 = p2.prime - p1.prime;
@@ -99,60 +109,102 @@ const detectSpiralArms = (primes: number[], angleDelta: number): SpiralArm[] => 
     };
   });
 
-  // Detect arms by looking for linear patterns
+  // Group primes by angular sectors to find radial arms
+  const numSectors = 12; // Divide into 12 angular sectors
+  const sectorSize = (2 * Math.PI) / numSectors;
+  const sectors: Map<number, typeof primePositions> = new Map();
+
+  primePositions.forEach(pos => {
+    // Normalize angle to [0, 2π]
+    let normalizedAngle = pos.angle % (2 * Math.PI);
+    if (normalizedAngle < 0) normalizedAngle += 2 * Math.PI;
+
+    const sectorIndex = Math.floor(normalizedAngle / sectorSize);
+    if (!sectors.has(sectorIndex)) {
+      sectors.set(sectorIndex, []);
+    }
+    sectors.get(sectorIndex)!.push(pos);
+  });
+
   const arms: SpiralArm[] = [];
   const minArmLength = 5;
-  const maxAngleDiff = 0.3; // Maximum angle difference to consider points part of same arm
 
-  // Use a sliding window approach to find consistent linear patterns
-  for (let i = 0; i < primePositions.length - minArmLength; i += Math.floor(minArmLength / 2)) {
-    const arm: SpiralArm = {
-      points: [],
-      predictions: []
-    };
+  // For each sector, find linear patterns (radial arms)
+  sectors.forEach((sectorPoints, sectorIndex) => {
+    if (sectorPoints.length < minArmLength) return;
 
-    // Start with initial points
-    arm.points.push(primePositions[i]);
+    // Sort by radius to process from inside out
+    sectorPoints.sort((a, b) => a.radius - b.radius);
 
-    // Look for points that continue the pattern
-    for (let j = i + 1; j < primePositions.length; j++) {
-      if (arm.points.length >= 2) {
-        const p1 = arm.points[arm.points.length - 2];
-        const p2 = arm.points[arm.points.length - 1];
-        const p3 = primePositions[j];
+    // Find consecutive primes in this sector
+    let currentArm: typeof primePositions = [];
 
-        // Calculate the angle of the line between consecutive points
-        const angle1 = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-        const angle2 = Math.atan2(p3.y - p2.y, p3.x - p2.x);
+    for (let i = 0; i < sectorPoints.length; i++) {
+      const point = sectorPoints[i];
 
-        // Normalize angle difference to [-π, π]
-        let angleDiff = angle2 - angle1;
-        while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-        while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-
-        // If angle is consistent, add to arm
-        if (Math.abs(angleDiff) < maxAngleDiff) {
-          arm.points.push(primePositions[j]);
-        }
+      if (currentArm.length === 0) {
+        currentArm.push(point);
       } else {
-        // For first few points, just add them
-        arm.points.push(primePositions[j]);
+        const lastPoint = currentArm[currentArm.length - 1];
+
+        // Check if this point continues the radial pattern
+        // Points should be roughly aligned and have increasing radius
+        const expectedDirection = {
+          x: lastPoint.x / lastPoint.radius,
+          y: lastPoint.y / lastPoint.radius
+        };
+        const actualDirection = {
+          x: point.x / point.radius,
+          y: point.y / point.radius
+        };
+
+        // Calculate angle between directions
+        const dotProduct = expectedDirection.x * actualDirection.x + expectedDirection.y * actualDirection.y;
+        const angleDiff = Math.acos(Math.max(-1, Math.min(1, dotProduct)));
+
+        if (angleDiff < 0.15) { // Very tight tolerance for radial alignment
+          currentArm.push(point);
+        } else {
+          // End current arm and start new one if current arm is long enough
+          if (currentArm.length >= minArmLength) {
+            const arm: SpiralArm = {
+              points: currentArm,
+              predictions: []
+            };
+
+            // Generate predictions
+            const numPredictions = 3;
+            for (let k = 0; k < numPredictions; k++) {
+              const prediction = predictNextPoint(currentArm, k + 1);
+              if (prediction) {
+                arm.predictions.push(prediction);
+              }
+            }
+            arms.push(arm);
+          }
+          // Start new arm with current point
+          currentArm = [point];
+        }
       }
     }
 
-    // Only keep arms with sufficient length
-    if (arm.points.length >= minArmLength) {
-      // Generate predictions for this arm
+    // Add final arm if long enough
+    if (currentArm.length >= minArmLength) {
+      const arm: SpiralArm = {
+        points: currentArm,
+        predictions: []
+      };
+
       const numPredictions = 3;
       for (let k = 0; k < numPredictions; k++) {
-        const prediction = predictNextPoint(arm.points, k + 1);
+        const prediction = predictNextPoint(currentArm, k + 1);
         if (prediction) {
           arm.predictions.push(prediction);
         }
       }
       arms.push(arm);
     }
-  }
+  });
 
   return arms;
 };
@@ -564,9 +616,6 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
 
       sceneRef.current.add(predictionGroup);
       predictionGroupRef.current = predictionGroup;
-
-      // Log accuracy to console for debugging
-      console.log('Spiral Arm Prediction Accuracy:', accuracy);
     } else {
       accuracyRef.current = null;
       setAccuracyState(null);
@@ -604,17 +653,7 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
 
   // The createVisualization function should NOT contain hooks
   const createVisualization = () => {
-    if (!sceneRef.current || !fontRef.current || !primesRef.current || primes.length === 0) {
-      console.log('createVisualization early return:', {
-        scene: !!sceneRef.current,
-        font: !!fontRef.current,
-        primesGroup: !!primesRef.current,
-        primesLength: primes.length
-      });
-      return;
-    }
-
-    console.log(`Creating visualization for ${primes.length} primes`);
+    if (!sceneRef.current || !fontRef.current || !primesRef.current || primes.length === 0) return;
 
     // Clear existing visualization
     while (primesRef.current.children.length > 0) {
@@ -686,37 +725,37 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
         style={{ display: 'block', zIndex: 1 }}
       />
       {showPredictions && accuracyState && (
-        <div className="absolute top-4 right-4 bg-black bg-opacity-75 text-white p-4 rounded-lg shadow-lg" style={{ zIndex: 20 }}>
-          <h3 className="text-lg font-bold mb-2">Prediction Accuracy</h3>
-          <div className="space-y-1 text-sm">
+        <div className="absolute top-4 right-4 bg-white text-gray-900 p-4 rounded-lg shadow-lg" style={{ zIndex: 20 }}>
+          <h3 className="text-lg font-bold mb-3">Prediction Accuracy</h3>
+          <div className="space-y-2 text-sm">
             <div className="flex justify-between gap-4">
-              <span className="text-gray-300">Total Predictions:</span>
-              <span className="font-mono">{accuracyState.totalPredictions}</span>
+              <span className="text-gray-600">Total Predictions:</span>
+              <span className="font-mono font-semibold">{accuracyState.totalPredictions}</span>
             </div>
             <div className="flex justify-between gap-4">
-              <span className="text-gray-300">Correct Predictions:</span>
-              <span className="font-mono">{accuracyState.correctPredictions}</span>
+              <span className="text-gray-600">Correct Predictions:</span>
+              <span className="font-mono font-semibold">{accuracyState.correctPredictions}</span>
             </div>
             <div className="flex justify-between gap-4">
-              <span className="text-gray-300">Accuracy:</span>
-              <span className="font-mono font-bold text-green-400">
+              <span className="text-gray-600">Accuracy:</span>
+              <span className="font-mono font-bold text-green-600">
                 {accuracyState.accuracy.toFixed(2)}%
               </span>
             </div>
             <div className="flex justify-between gap-4">
-              <span className="text-gray-300">Avg Distance:</span>
-              <span className="font-mono">{accuracyState.averageDistance.toFixed(3)}</span>
+              <span className="text-gray-600">Avg Distance:</span>
+              <span className="font-mono font-semibold text-gray-700">{accuracyState.averageDistance.toFixed(3)}</span>
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-gray-600 text-xs text-gray-400">
-            <div className="space-y-1">
+          <div className="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-600">
+            <div className="space-y-1.5">
               <div className="flex items-center gap-2">
                 <span className="inline-block w-6 h-0.5 bg-orange-500 opacity-60"></span>
-                <span>Detected Spiral Arms</span>
+                <span>Detected Arms</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="inline-block w-6 h-0.5 bg-red-500"></span>
-                <span>Predicted Extensions</span>
+                <span>Predictions</span>
               </div>
             </div>
           </div>
