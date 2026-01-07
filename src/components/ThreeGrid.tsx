@@ -1,8 +1,8 @@
 import PostponedSieve from 'fast-prime-gen';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import PrimeControls from './PrimeControls';
-import PrimeVisualization from './PrimeVisualization';
+import PrimeVisualization, { PredictionAccuracy } from './PrimeVisualization';
 
 interface ThreeGridProps {
   width: number;
@@ -17,8 +17,10 @@ const ThreeGrid: React.FC<ThreeGridProps> = ({ width, height }) => {
   const [angleDelta, setAngleDelta] = useState(36);
   const [showConnector, setShowConnector] = useState(false);
   const [showPredictions, setShowPredictions] = useState(false);
+  const [predictionCount, setPredictionCount] = useState(3);
   const [primes, setPrimes] = useState<number[]>([]);
   const controlsRef = useRef<OrbitControls | null>(null);
+  const accuracyRef = useRef<PredictionAccuracy | null>(null);
   
   useEffect(() => {
     const sieve = PostponedSieve();
@@ -67,6 +69,20 @@ const ThreeGrid: React.FC<ThreeGridProps> = ({ width, height }) => {
     setShowPredictions(e.target.checked);
   };
 
+  // Handle prediction count change
+  const handlePredictionCountChange = (e: React.ChangeEvent<HTMLInputElement> | React.FormEvent<HTMLInputElement>) => {
+    const target = e.target as HTMLInputElement;
+    const value = parseInt(target.value);
+    if (!isNaN(value) && value >= 1 && value <= 20) {
+      setPredictionCount(value);
+    }
+  };
+
+  // Handle accuracy updates from visualization
+  const handleAccuracyUpdate = useCallback((accuracy: PredictionAccuracy) => {
+    accuracyRef.current = accuracy;
+  }, []);
+
   if (isLoading) {
     return <div>Loading...</div>;
   }
@@ -79,8 +95,10 @@ const ThreeGrid: React.FC<ThreeGridProps> = ({ width, height }) => {
         angleDelta={angleDelta}
         showConnector={showConnector}
         showPredictions={showPredictions}
+        predictionCount={predictionCount}
         onPrimeCountChange={handlePrimeCountChange}
         onAngleDeltaChange={handleAngleDeltaChange}
+        onPredictionCountChange={handlePredictionCountChange}
         onUpdatePrimes={(count) => setPrimeCount(count)}
         onResetCamera={handleResetCamera}
         onToggleConnector={handleToggleConnector}
@@ -93,9 +111,11 @@ const ThreeGrid: React.FC<ThreeGridProps> = ({ width, height }) => {
         angleDelta={angleDelta}
         showConnector={showConnector}
         showPredictions={showPredictions}
+        predictionCount={predictionCount}
         setPosition={setPosition}
         setZoom={setZoom}
         position={position}
+        onAccuracyUpdate={handleAccuracyUpdate}
       />
     </div>
   );

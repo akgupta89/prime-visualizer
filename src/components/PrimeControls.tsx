@@ -6,8 +6,10 @@ interface PrimeControlsProps {
   angleDelta: number;
   showConnector: boolean;
   showPredictions: boolean;
+  predictionCount: number;
   onPrimeCountChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onAngleDeltaChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onPredictionCountChange: (e: React.ChangeEvent<HTMLInputElement> | React.FormEvent<HTMLInputElement>) => void;
   onUpdatePrimes: (count: number) => void;
   onResetCamera: () => void;
   onToggleConnector: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -20,8 +22,10 @@ const PrimeControls: React.FC<PrimeControlsProps> = ({
   angleDelta,
   showConnector,
   showPredictions,
+  predictionCount,
   onPrimeCountChange,
   onAngleDeltaChange,
+  onPredictionCountChange,
   onUpdatePrimes,
   onResetCamera,
   onToggleConnector,
@@ -182,6 +186,31 @@ const PrimeControls: React.FC<PrimeControlsProps> = ({
                 Show Spiral Arm Predictions
               </label>
             </div>
+
+            {showPredictions && (
+              <>
+                <div className="relative mt-2">
+                  <label htmlFor="predictionCount" className="block text-xs text-gray-600 mb-1">
+                    Predictions per Arm: {predictionCount}
+                  </label>
+                  <input
+                    id="predictionCount"
+                    type="range"
+                    min="1"
+                    max="20"
+                    value={predictionCount}
+                    onChange={onPredictionCountChange}
+                    onInput={onPredictionCountChange}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    disabled={isLoading}
+                  />
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>1</span>
+                    <span>20</span>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="flex flex-col space-y-2">
               <button

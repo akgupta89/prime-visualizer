@@ -1,8 +1,34 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Font, FontLoader } from 'three/examples/jsm/loaders/FontLoader.js';
 import { createPrimeSphere } from './PrimeSphere';
+
+// Simple prime generator to extend primes for prediction visualization
+const generatePrimesUpTo = (count: number, startingPrimes: number[]): number[] => {
+  if (startingPrimes.length >= count) return startingPrimes.slice(0, count);
+
+  const primes = [...startingPrimes];
+  let candidate = primes.length > 0 ? primes[primes.length - 1] + 1 : 2;
+
+  while (primes.length < count) {
+    let isPrime = true;
+    const sqrt = Math.sqrt(candidate);
+    for (const p of primes) {
+      if (p > sqrt) break;
+      if (candidate % p === 0) {
+        isPrime = false;
+        break;
+      }
+    }
+    if (isPrime) {
+      primes.push(candidate);
+    }
+    candidate++;
+  }
+
+  return primes;
+};
 
 interface PrimeVisualizationProps {
   width: number;
@@ -11,213 +37,225 @@ interface PrimeVisualizationProps {
   angleDelta: number;
   showConnector: boolean;
   showPredictions: boolean;
+  predictionCount: number;
   setPosition: (position: { x: number; y: number; z: number }) => void;
   setZoom: (zoom: number) => void;
   position: { x: number; y: number; z: number };
+  onAccuracyUpdate?: (accuracy: PredictionAccuracy) => void;
+}
+
+interface SpiralArmPoint {
+  x: number;
+  y: number;
+  z: number;
+  prime: number;
+  index: number;
+  angle: number;
+  radius: number;
 }
 
 interface SpiralArm {
-  points: { x: number; y: number; z: number; prime: number; index: number }[];
+  armIndex: number; // The residue class (0 to stepsPerRotation-1)
+  points: SpiralArmPoint[];
   predictions: { x: number; y: number; z: number; predictedPrime: number }[];
 }
 
-interface PredictionAccuracy {
+export interface PredictionAccuracy {
   totalPredictions: number;
   correctPredictions: number;
   averageDistance: number;
   accuracy: number;
 }
 
-// Helper function to predict the next point in a spiral arm
-const predictNextPoint = (
-  points: { x: number; y: number; z: number; prime: number; index: number }[],
-  stepsAhead: number = 1
-): { x: number; y: number; z: number; predictedPrime: number } | null => {
-  if (points.length < 3) return null;
+// Helper function to predict next points along a spiral arm
+// Uses the residue class pattern: next point is at index + stepsPerRotation
+const predictArmExtension = (
+  points: SpiralArmPoint[],
+  stepsPerRotation: number,
+  angleDeltaRad: number,
+  numPredictions: number = 3
+): { x: number; y: number; z: number; predictedPrime: number }[] => {
+  const predictions: { x: number; y: number; z: number; predictedPrime: number }[] = [];
+
+  if (points.length < 2) return predictions;
 
   const n = points.length;
-  const p1 = points[n - 3];
-  const p2 = points[n - 2];
-  const p3 = points[n - 1];
+  const lastPoint = points[n - 1];
 
-  // Calculate radii for the last 3 points
-  const r1 = Math.sqrt(p1.x * p1.x + p1.y * p1.y);
-  const r2 = Math.sqrt(p2.x * p2.x + p2.y * p2.y);
-  const r3 = Math.sqrt(p3.x * p3.x + p3.y * p3.y);
+  // Calculate prime gaps to estimate growth pattern
+  // Use last several points for better estimation
+  const numPointsToUse = Math.min(5, n);
+  const recentPoints = points.slice(-numPointsToUse);
 
-  // Calculate the radial direction (unit vector from origin to p3)
-  const dirX = p3.x / r3;
-  const dirY = p3.y / r3;
-
-  // Predict next radius using pattern of radial growth
-  const radiusDiff1 = r2 - r1;
-  const radiusDiff2 = r3 - r2;
-  const radiusAccel = radiusDiff2 - radiusDiff1;
-
-  let predictedRadius = r3;
-  let currentRadiusDiff = radiusDiff2;
-
-  for (let i = 0; i < stepsAhead; i++) {
-    currentRadiusDiff += radiusAccel;
-    predictedRadius += currentRadiusDiff;
+  const primeGaps: number[] = [];
+  for (let i = 1; i < recentPoints.length; i++) {
+    primeGaps.push(recentPoints[i].prime - recentPoints[i - 1].prime);
   }
 
-  // Ensure predicted radius doesn't become negative
-  if (predictedRadius < 0) predictedRadius = r3 + (stepsAhead * radiusDiff2);
+  // Calculate average gap and acceleration
+  const avgGap = primeGaps.length > 0
+    ? primeGaps.reduce((a, b) => a + b, 0) / primeGaps.length
+    : 100; // fallback
 
-  // Project along the radial direction
-  const nextX = dirX * predictedRadius;
-  const nextY = dirY * predictedRadius;
+  const gapAcceleration = primeGaps.length > 1
+    ? (primeGaps[primeGaps.length - 1] - primeGaps[0]) / (primeGaps.length - 1)
+    : 0;
 
-  // Predict prime value based on pattern
-  const primeDiff1 = p2.prime - p1.prime;
-  const primeDiff2 = p3.prime - p2.prime;
-  const primeAccel = primeDiff2 - primeDiff1;
+  // Generate predictions
+  let predictedPrime = lastPoint.prime;
+  let currentGap = avgGap;
 
-  let predictedPrime = p3.prime;
-  let currentPrimeDiff = primeDiff2;
+  for (let step = 1; step <= numPredictions; step++) {
+    // The next point on this arm would be at index: lastPoint.index + (step * stepsPerRotation)
+    const predictedIndex = lastPoint.index + (step * stepsPerRotation);
+    const predictedAngle = predictedIndex * angleDeltaRad;
 
-  for (let i = 0; i < stepsAhead; i++) {
-    currentPrimeDiff += primeAccel;
-    predictedPrime += currentPrimeDiff;
+    // Predict prime value using the growth pattern
+    currentGap += gapAcceleration;
+    predictedPrime += currentGap;
+
+    // Calculate position
+    const predictedRadius = 0.01 * predictedPrime;
+
+    predictions.push({
+      x: predictedRadius * Math.cos(predictedAngle),
+      y: predictedRadius * Math.sin(predictedAngle),
+      z: 0,
+      predictedPrime: Math.round(predictedPrime)
+    });
   }
 
-  return {
-    x: nextX,
-    y: nextY,
-    z: 0,
-    predictedPrime: Math.round(predictedPrime)
-  };
+  return predictions;
 };
 
-// Helper function to detect spiral arms
-const detectSpiralArms = (primes: number[], angleDelta: number): SpiralArm[] => {
-  if (primes.length < 10) return [];
+// Helper function to detect spiral arms using RESIDUE CLASS grouping
+// Spiral arms are formed by primes at indices: k, k+N, k+2N, k+3N, ...
+// where N = stepsPerRotation = 360 / angleDelta
+const detectSpiralArms = (
+  primes: number[],
+  angleDelta: number,
+  numPredictions: number = 3
+): SpiralArm[] => {
+  if (primes.length < 3) return [];
 
-  // Map primes to their positions
-  const primePositions = primes.map((prime, index) => {
-    const angle = index * (angleDelta * Math.PI / 180);
+  const angleDeltaRad = angleDelta * Math.PI / 180;
+
+  // Calculate how many steps make approximately one full rotation
+  // This is the key insight: N = 360 / angleDelta
+  const stepsPerRotation = Math.round(360 / angleDelta);
+
+  // Create arm buckets based on residue class (index mod stepsPerRotation)
+  const armBuckets: Map<number, SpiralArmPoint[]> = new Map();
+
+  primes.forEach((prime, index) => {
+    // The arm index is determined by the residue class
+    const armIndex = index % stepsPerRotation;
+
+    const angle = index * angleDeltaRad;
     const radius = 0.01 * prime;
-    const x = radius * Math.cos(angle);
-    const y = radius * Math.sin(angle);
 
-    // Calculate the angular position from origin (theta)
-    const theta = Math.atan2(y, x);
-
-    return {
+    const point: SpiralArmPoint = {
       prime,
       index,
-      x,
-      y,
+      x: radius * Math.cos(angle),
+      y: radius * Math.sin(angle),
       z: 0,
       angle,
-      radius,
-      theta
+      radius
     };
+
+    if (!armBuckets.has(armIndex)) {
+      armBuckets.set(armIndex, []);
+    }
+    armBuckets.get(armIndex)!.push(point);
   });
 
-  // Group primes by their angular position (theta) - this creates radial arms
-  const angularTolerance = 0.1; // radians - points within this tolerance are on same arm
+  // Convert buckets to spiral arms
+  // Points are naturally sorted by index since we iterate through primes in order
   const arms: SpiralArm[] = [];
-  const used = new Set<number>();
 
-  primePositions.forEach((seed, seedIndex) => {
-    if (used.has(seedIndex)) return;
-
-    // Find all points at similar angular positions (same radial direction)
-    const armPoints: typeof primePositions = [];
-
-    primePositions.forEach((point, pointIndex) => {
-      if (used.has(pointIndex)) return;
-
-      // Calculate angular difference accounting for wrap-around
-      let thetaDiff = Math.abs(point.theta - seed.theta);
-      if (thetaDiff > Math.PI) thetaDiff = 2 * Math.PI - thetaDiff;
-
-      if (thetaDiff < angularTolerance) {
-        armPoints.push(point);
-        used.add(pointIndex);
-      }
-    });
-
-    // Only create arm if we have enough points
-    if (armPoints.length >= 5) {
-      // Sort by radius (inside to outside)
-      armPoints.sort((a, b) => a.radius - b.radius);
+  armBuckets.forEach((points, armIndex) => {
+    if (points.length >= 2) {
+      // Points should already be sorted by index (innermost to outermost on spiral)
+      // But let's ensure they're sorted correctly
+      points.sort((a, b) => a.index - b.index);
 
       const arm: SpiralArm = {
-        points: armPoints,
+        armIndex,
+        points,
         predictions: []
       };
 
-      // Generate predictions
-      const numPredictions = 3;
-      for (let k = 0; k < numPredictions; k++) {
-        const prediction = predictNextPoint(armPoints, k + 1);
-        if (prediction) {
-          arm.predictions.push(prediction);
-        }
+      // Generate predictions extending the spiral arm
+      if (points.length >= 2) {
+        arm.predictions = predictArmExtension(points, stepsPerRotation, angleDeltaRad, numPredictions);
       }
 
       arms.push(arm);
     }
   });
 
+  // Sort arms by their armIndex for consistent ordering
+  arms.sort((a, b) => a.armIndex - b.armIndex);
+
   return arms;
 };
 
-// Helper function to calculate prediction accuracy
-const calculateAccuracy = (
-  arms: SpiralArm[],
-  allPrimes: number[],
-  angleDelta: number
+// Helper function to calculate prediction accuracy using extended primes
+// Compares predictions against actual prime positions (including generated ones)
+const calculateAccuracyWithExtended = (
+  actualPrimes: number[],
+  extendedPrimes: number[],
+  angleDelta: number,
+  numPredictions: number
 ): PredictionAccuracy => {
+  if (actualPrimes.length < 10) {
+    return { totalPredictions: 0, correctPredictions: 0, averageDistance: 0, accuracy: 0 };
+  }
+
+  const angleDeltaRad = angleDelta * Math.PI / 180;
+  const stepsPerRotation = Math.round(360 / angleDelta);
+
+  // Detect arms using actual primes
+  const arms = detectSpiralArms(actualPrimes, angleDelta, numPredictions);
+
   let totalPredictions = 0;
   let correctPredictions = 0;
   let totalDistance = 0;
 
-  // Map all primes to positions for comparison
-  const primePositionMap = new Map<number, { x: number; y: number }>();
-  allPrimes.forEach((prime, index) => {
-    const angle = index * (angleDelta * Math.PI / 180);
-    const radius = 0.01 * prime;
-    primePositionMap.set(prime, {
-      x: radius * Math.cos(angle),
-      y: radius * Math.sin(angle)
-    });
-  });
-
+  // For each arm, compare predictions to actual positions in extended primes
   arms.forEach(arm => {
-    arm.predictions.forEach(prediction => {
-      totalPredictions++;
+    if (arm.points.length === 0) return;
 
-      // Check if the predicted prime exists
-      const actualPos = primePositionMap.get(prediction.predictedPrime);
-      if (actualPos) {
+    const lastPoint = arm.points[arm.points.length - 1];
+
+    arm.predictions.forEach((prediction, predIdx) => {
+      const predictedIndex = lastPoint.index + ((predIdx + 1) * stepsPerRotation);
+
+      // Get actual position from extended primes
+      if (predictedIndex < extendedPrimes.length) {
+        totalPredictions++;
+
+        const actualPrime = extendedPrimes[predictedIndex];
+        const actualAngle = predictedIndex * angleDeltaRad;
+        const actualRadius = 0.01 * actualPrime;
+        const actualX = actualRadius * Math.cos(actualAngle);
+        const actualY = actualRadius * Math.sin(actualAngle);
+
+        // Calculate distance between predicted and actual
         const distance = Math.sqrt(
-          Math.pow(prediction.x - actualPos.x, 2) +
-          Math.pow(prediction.y - actualPos.y, 2)
+          Math.pow(prediction.x - actualX, 2) +
+          Math.pow(prediction.y - actualY, 2)
         );
 
         totalDistance += distance;
 
-        // Consider it correct if within a threshold
-        if (distance < 0.5) {
+        // Consider correct if within a reasonable threshold
+        const avgRadius = (Math.sqrt(prediction.x * prediction.x + prediction.y * prediction.y) + actualRadius) / 2;
+        const threshold = Math.max(0.3, avgRadius * 0.05); // 5% of radius or 0.3, whichever is larger
+        if (distance < threshold) {
           correctPredictions++;
         }
-      } else {
-        // If prime doesn't exist, find closest actual prime position
-        let minDistance = Infinity;
-        primePositionMap.forEach((pos) => {
-          const distance = Math.sqrt(
-            Math.pow(prediction.x - pos.x, 2) +
-            Math.pow(prediction.y - pos.y, 2)
-          );
-          if (distance < minDistance) {
-            minDistance = distance;
-          }
-        });
-        totalDistance += minDistance;
       }
     });
   });
@@ -240,9 +278,11 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
   angleDelta,
   showConnector,
   showPredictions,
+  predictionCount,
   setPosition,
   setZoom,
-  position
+  position,
+  onAccuracyUpdate
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -250,7 +290,7 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const primesRef = useRef<THREE.Group | null>(null);
-  const gridRef = useRef<THREE.GridHelper | null>(null);
+  const gridRef = useRef<THREE.Mesh | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const fontRef = useRef<Font | null>(null);
   const initializedRef = useRef(false);
@@ -344,14 +384,70 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
     
     controlsRef.current = controls;
 
-    // Create grid
-    const gridSize = 200; // Much larger grid
-    const gridDivisions = 2000; // More divisions for better detail
-    const gridHelper = new THREE.GridHelper(gridSize, gridDivisions, 0x888888, 0xcccccc);
-    gridHelper.rotation.x = Math.PI / 2; // Make grid horizontal (x-y plane)
-    
-    scene.add(gridHelper);
-    gridRef.current = gridHelper;
+    // Create infinite grid using custom shader
+    const infiniteGridShader = {
+      uniforms: {
+        uColor1: { value: new THREE.Color(0x888888) },
+        uColor2: { value: new THREE.Color(0xcccccc) },
+        uDistance: { value: 1000 },
+        uSize1: { value: 1 },
+        uSize2: { value: 10 },
+      },
+      vertexShader: `
+        varying vec3 vWorldPosition;
+        void main() {
+          vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = worldPosition.xyz;
+          gl_Position = projectionMatrix * viewMatrix * worldPosition;
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uColor1;
+        uniform vec3 uColor2;
+        uniform float uDistance;
+        uniform float uSize1;
+        uniform float uSize2;
+
+        varying vec3 vWorldPosition;
+
+        float getGrid(float size) {
+          vec2 r = vWorldPosition.xy / size;
+          vec2 grid = abs(fract(r - 0.5) - 0.5) / fwidth(r);
+          float line = min(grid.x, grid.y);
+          return 1.0 - min(line, 1.0);
+        }
+
+        void main() {
+          float d = 1.0 - min(length(vWorldPosition.xy) / uDistance, 1.0);
+          float g1 = getGrid(uSize1);
+          float g2 = getGrid(uSize2);
+
+          // Blend between small and large grid based on distance
+          float gridAlpha = (g2 * 0.5 + g1 * 0.5) * pow(d, 2.0);
+
+          vec3 color = mix(uColor2, uColor1, g1);
+
+          if (gridAlpha < 0.01) discard;
+
+          gl_FragColor = vec4(color, gridAlpha * 0.6);
+        }
+      `,
+    };
+
+    const gridGeometry = new THREE.PlaneGeometry(10000, 10000, 1, 1);
+    const gridMaterial = new THREE.ShaderMaterial({
+      uniforms: infiniteGridShader.uniforms,
+      vertexShader: infiniteGridShader.vertexShader,
+      fragmentShader: infiniteGridShader.fragmentShader,
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+
+    const infiniteGrid = new THREE.Mesh(gridGeometry, gridMaterial);
+    infiniteGrid.position.z = -0.01; // Slightly behind to avoid z-fighting
+    scene.add(infiniteGrid);
+    gridRef.current = infiniteGrid;
 
     // Create axes
     const axesHelper = new THREE.AxesHelper(5);
@@ -518,39 +614,86 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
     if (showPredictions && primes.length > 10) {
       const predictionGroup = new THREE.Group();
 
-      // Detect spiral arms
-      const arms = detectSpiralArms(primes, angleDelta);
+      // Use ALL primes to detect arms and make predictions that extend beyond
+      const stepsPerRotation = Math.round(360 / angleDelta);
+      const angleDeltaRad = angleDelta * Math.PI / 180;
 
-      // Calculate accuracy
-      const accuracy = calculateAccuracy(arms, primes, angleDelta);
+      // Calculate how many additional primes we need for visualization
+      // The furthest prediction index is: lastPrimeIndex + (predictionCount * stepsPerRotation)
+      const maxPredictionIndex = primes.length - 1 + (predictionCount * stepsPerRotation);
+
+      // Generate temporary extended primes for visualization (not added to actual data)
+      const extendedPrimes = generatePrimesUpTo(maxPredictionIndex + 1, primes);
+
+      // Detect spiral arms using all actual primes
+      const arms = detectSpiralArms(primes, angleDelta, predictionCount);
+
+      // Calculate accuracy using extended primes
+      const accuracy = calculateAccuracyWithExtended(primes, extendedPrimes, angleDelta, predictionCount);
       accuracyRef.current = accuracy;
       setAccuracyState(accuracy);
 
+      // Notify parent of accuracy update
+      if (onAccuracyUpdate) {
+        onAccuracyUpdate(accuracy);
+      }
+
       // Visualize each arm
       arms.forEach((arm) => {
-        // Draw arm line in orange
+        // Draw arm as a smooth curve through all points
         const armPoints = arm.points.map(p => new THREE.Vector3(p.x, p.y, p.z));
-        const armGeometry = new THREE.BufferGeometry().setFromPoints(armPoints);
-        const armMaterial = new THREE.LineBasicMaterial({
-          color: 0xff8800,
-          linewidth: 3,
-          transparent: true,
-          opacity: 0.6
-        });
-        const armLine = new THREE.Line(armGeometry, armMaterial);
-        predictionGroup.add(armLine);
 
-        // Draw predictions as a continuous extension
-        if (arm.predictions.length > 0) {
+        if (armPoints.length >= 2) {
+          let curvePoints: THREE.Vector3[];
+
+          if (armPoints.length >= 3) {
+            // Use CatmullRomCurve3 for smooth spiral curve
+            const curve = new THREE.CatmullRomCurve3(armPoints, false, 'catmullrom', 0.5);
+            curvePoints = curve.getPoints(armPoints.length * 10);
+          } else {
+            // Just use straight line for 2 points
+            curvePoints = armPoints;
+          }
+
+          const armGeometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
+          const armMaterial = new THREE.LineBasicMaterial({
+            color: 0xff8800,
+            linewidth: 3,
+            transparent: true,
+            opacity: 0.7
+          });
+          const armLine = new THREE.Line(armGeometry, armMaterial);
+          predictionGroup.add(armLine);
+        }
+
+        // Draw predictions as a smooth extension of the arm
+        if (arm.predictions.length > 0 && arm.points.length >= 1) {
           const lastArmPoint = arm.points[arm.points.length - 1];
 
-          // Create continuous line from last arm point through all predictions
-          const predictionLinePoints = [
-            new THREE.Vector3(lastArmPoint.x, lastArmPoint.y, lastArmPoint.z),
-            ...arm.predictions.map(p => new THREE.Vector3(p.x, p.y, p.z))
-          ];
+          // Create curve from last few arm points through predictions for smooth transition
+          const transitionPoints: THREE.Vector3[] = [];
 
-          const predLineGeometry = new THREE.BufferGeometry().setFromPoints(predictionLinePoints);
+          // Include last 2-3 arm points for smooth curve continuation
+          const numTransitionPoints = Math.min(3, arm.points.length);
+          for (let i = arm.points.length - numTransitionPoints; i < arm.points.length; i++) {
+            const p = arm.points[i];
+            transitionPoints.push(new THREE.Vector3(p.x, p.y, p.z));
+          }
+
+          // Add prediction points
+          arm.predictions.forEach(p => {
+            transitionPoints.push(new THREE.Vector3(p.x, p.y, p.z));
+          });
+
+          let predCurvePoints: THREE.Vector3[];
+          if (transitionPoints.length >= 3) {
+            const predCurve = new THREE.CatmullRomCurve3(transitionPoints, false, 'catmullrom', 0.5);
+            predCurvePoints = predCurve.getPoints(transitionPoints.length * 10);
+          } else {
+            predCurvePoints = transitionPoints;
+          }
+
+          const predLineGeometry = new THREE.BufferGeometry().setFromPoints(predCurvePoints);
           const predLineMaterial = new THREE.LineBasicMaterial({
             color: 0xff0000,
             linewidth: 2,
@@ -560,17 +703,63 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
           const predLine = new THREE.Line(predLineGeometry, predLineMaterial);
           predictionGroup.add(predLine);
 
-          // Draw prediction spheres
+          // Draw prediction spheres and actual position comparison
+          const numPreds = arm.predictions.length;
+
           arm.predictions.forEach((prediction, predIndex) => {
+            // Calculate opacity that fades from 0.7 to 0.3 across all predictions
+            const opacityRange = 0.4;
+            const minOpacity = 0.3;
+            const opacity = minOpacity + opacityRange * (1 - predIndex / Math.max(numPreds - 1, 1));
+
+            // Draw predicted position (red sphere)
             const predSphereGeometry = new THREE.SphereGeometry(0.15, 16, 16);
             const predSphereMaterial = new THREE.MeshBasicMaterial({
               color: 0xff0000,
               transparent: true,
-              opacity: 0.5 - (predIndex * 0.1)
+              opacity: opacity
             });
             const predSphere = new THREE.Mesh(predSphereGeometry, predSphereMaterial);
             predSphere.position.set(prediction.x, prediction.y, prediction.z);
             predictionGroup.add(predSphere);
+
+            // Calculate where the actual prime would be at this predicted index
+            // Use EXTENDED primes (includes generated temporary primes for visualization)
+            const predictedIndex = lastArmPoint.index + ((predIndex + 1) * stepsPerRotation);
+
+            // Get actual position from extended primes
+            if (predictedIndex < extendedPrimes.length) {
+              const actualPrime = extendedPrimes[predictedIndex];
+              const actualAngle = predictedIndex * angleDeltaRad;
+              const actualRadius = 0.01 * actualPrime;
+              const actualX = actualRadius * Math.cos(actualAngle);
+              const actualY = actualRadius * Math.sin(actualAngle);
+
+              // Draw actual position (green sphere)
+              const actualSphereGeometry = new THREE.SphereGeometry(0.12, 16, 16);
+              const actualSphereMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00ff00,
+                transparent: true,
+                opacity: opacity
+              });
+              const actualSphere = new THREE.Mesh(actualSphereGeometry, actualSphereMaterial);
+              actualSphere.position.set(actualX, actualY, 0);
+              predictionGroup.add(actualSphere);
+
+              // Draw line connecting predicted to actual (shows error)
+              const errorLineGeometry = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(prediction.x, prediction.y, prediction.z),
+                new THREE.Vector3(actualX, actualY, 0)
+              ]);
+              const errorLineMaterial = new THREE.LineBasicMaterial({
+                color: 0xffff00, // Yellow line shows the error
+                transparent: true,
+                opacity: opacity * 0.8,
+                linewidth: 2
+              });
+              const errorLine = new THREE.Line(errorLineGeometry, errorLineMaterial);
+              predictionGroup.add(errorLine);
+            }
           });
         }
       });
@@ -581,7 +770,7 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
       accuracyRef.current = null;
       setAccuracyState(null);
     }
-  }, [showPredictions, primes, angleDelta]);
+  }, [showPredictions, primes, angleDelta, predictionCount, onAccuracyUpdate]);
 
   // Update the cleanup function
   const cleanupPrimeVisualization = () => {
@@ -711,12 +900,20 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
           <div className="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-600">
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
-                <span className="inline-block w-6 h-0.5 bg-orange-500 opacity-60"></span>
+                <span className="inline-block w-6 h-0.5 bg-orange-500 opacity-70"></span>
                 <span>Detected Arms</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="inline-block w-6 h-0.5 bg-red-500"></span>
-                <span>Predictions</span>
+                <span className="inline-block w-3 h-3 rounded-full bg-red-500"></span>
+                <span>Predicted Position</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-block w-3 h-3 rounded-full bg-green-500"></span>
+                <span>Actual Position</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-block w-6 h-0.5 bg-yellow-400"></span>
+                <span>Prediction Error</span>
               </div>
             </div>
           </div>
