@@ -5,11 +5,15 @@ interface PrimeControlsProps {
   isLoading: boolean;
   angleDelta: number;
   showConnector: boolean;
+  showPredictions: boolean;
+  predictionCount: number;
   onPrimeCountChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onAngleDeltaChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onPredictionCountChange: (e: React.ChangeEvent<HTMLInputElement> | React.FormEvent<HTMLInputElement>) => void;
   onUpdatePrimes: (count: number) => void;
   onResetCamera: () => void;
   onToggleConnector: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onTogglePredictions: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
 const PrimeControls: React.FC<PrimeControlsProps> = ({
@@ -17,11 +21,15 @@ const PrimeControls: React.FC<PrimeControlsProps> = ({
   isLoading,
   angleDelta,
   showConnector,
+  showPredictions,
+  predictionCount,
   onPrimeCountChange,
   onAngleDeltaChange,
+  onPredictionCountChange,
   onUpdatePrimes,
   onResetCamera,
-  onToggleConnector
+  onToggleConnector,
+  onTogglePredictions
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -164,7 +172,46 @@ const PrimeControls: React.FC<PrimeControlsProps> = ({
                 Link Primes
               </label>
             </div>
-            
+
+            <div className="flex items-center mt-2">
+              <input
+                id="showPredictions"
+                type="checkbox"
+                onChange={onTogglePredictions}
+                checked={showPredictions}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                disabled={isLoading}
+              />
+              <label htmlFor="showPredictions" className="ml-2 block text-sm text-gray-900">
+                Show Spiral Arm Predictions
+              </label>
+            </div>
+
+            {showPredictions && (
+              <>
+                <div className="relative mt-2">
+                  <label htmlFor="predictionCount" className="block text-xs text-gray-600 mb-1">
+                    Predictions per Arm: {predictionCount}
+                  </label>
+                  <input
+                    id="predictionCount"
+                    type="range"
+                    min="1"
+                    max="20"
+                    value={predictionCount}
+                    onChange={onPredictionCountChange}
+                    onInput={onPredictionCountChange}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    disabled={isLoading}
+                  />
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>1</span>
+                    <span>20</span>
+                  </div>
+                </div>
+              </>
+            )}
+
             <div className="flex flex-col space-y-2">
               <button
                 onClick={onResetCamera}
