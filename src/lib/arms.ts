@@ -1,4 +1,4 @@
-import { makeArmPredictor, makePredictor } from './prediction';
+import { makeArmPredictor, makePredictor, nthPrimeEstimate } from './prediction';
 
 // Spiral-arm math, extracted from the visualization component: residue-class
 // arm detection, hybrid prediction, accuracy scoring, and the layout mappers.
@@ -19,6 +19,7 @@ export interface SpiralArm {
   armIndex: number; // The residue class (0 to stepsPerRotation-1)
   points: ArmPoint[];
   predictions: ArmPoint[]; // future points on the arm, prime = predicted value
+  extensionPath: ArmPoint[]; // dense fractional-index samples along the precessing arm
 }
 
 export interface PredictionAccuracy {
@@ -41,30 +42,45 @@ export const EMPTY_ACCURACY: PredictionAccuracy = {
 // set by how close N·Δ lands to a whole number of turns; the leftover is the
 // per-step drift, and the arm precesses by that much as it grows outward.
 //
-// Rounding 360/Δ picks a bad N whenever Δ doesn't divide 360 — at 37.2° it gives
-// N=10, which overshoots by 12° per step, so the "arm" coils around the origin
-// instead of radiating out. But arms exist at EVERY angle: the good N are the
-// denominators of the continued-fraction convergents of Δ/360, i.e. the best
-// rational approximations. At 37.2° those are 9, 10, 29, 300 with drifts −25.2°,
-// 12°, −1.2°, 0° — N=29 is the structure the eye actually picks out. At the
-// golden angle they are the Fibonacci numbers, which is why a sunflower shows
-// 34/55/89 spirals.
+// Arms exist at EVERY angle, one family per (semi)convergent denominator of
+// Δ/360, and the family the EYE picks out is scale-dependent: the parastichy
+// problem from phyllotaxis (Vogel/Ridley — why a sunflower shows 21/34/55
+// spirals as it grows). The dominant family minimizes the spacing between
+// CONSECUTIVE points on the same arm, measured where most points live. Picking
+// the most exact family instead (the old behavior) yields the straightest but
+// stubbiest arms — a starburst of 4-point rays at Δ=35° where the eye plainly
+// sees 10 sweeping spirals.
 //
-// Integer math on the entered angle (at most 3 decimals) keeps this exact.
+// Integer math on the entered angle (at most 3 decimals) keeps drift exact.
 const ANGLE_SCALE = 1000;
 const FULL_TURN = 360 * ANGLE_SCALE;
 
 // Fewer points than this and an arm doesn't read as one
-const MIN_POINTS_PER_ARM = 3;
+const MIN_POINTS_PER_ARM = 5;
+
+// Beyond this per-step precession the eye no longer chains points into an arm.
+// Never changes a winner (validated) — it keeps the alternates list honest.
+const MAX_DRIFT_DEG = 60;
+
+// Where along the sequence the score is evaluated (outer-biased: the eye reads
+// structure at the rim). The one perceptual knob — 0.5 and 0.8 both mis-pick
+// (validated against browser observations at 35°, 37.2°, 110°, φ).
+const REP_FRAC = 0.6;
 
 export interface ArmStructure {
   period: number; // N — indices N apart share an arm
   driftDeg: number; // signed precession per step; 0 means an exact ray
 }
 
-// Denominators of the continued-fraction convergents of n/d, increasing.
-// Recurrence: q₋₂ = 1, q₋₁ = 0, qₖ = aₖ·qₖ₋₁ + qₖ₋₂
-const convergentDenominators = (n: number, d: number): number[] => {
+export interface ArmCandidate extends ArmStructure {
+  pointsPerArm: number;
+  score: number; // within-arm neighbor spacing at the representative radius
+}
+
+// Denominators of ALL semiconvergents of n/d (every best one-sided rational
+// approximation): during the CF recurrence with partial quotient a, emit
+// q = j·qₖ₋₁ + qₖ₋₂ for j = 1..a.
+const semiconvergentDenominators = (n: number, d: number): number[] => {
   const denominators: number[] = [];
   let qPrev2 = 1;
   let qPrev1 = 0;
@@ -73,12 +89,14 @@ const convergentDenominators = (n: number, d: number): number[] => {
   while (den !== 0) {
     const a = Math.floor(num / den);
     [num, den] = [den, num - a * den];
-    const q = a * qPrev1 + qPrev2;
+    for (let j = 1; j <= a; j++) {
+      denominators.push(j * qPrev1 + qPrev2);
+    }
+    const qk = a * qPrev1 + qPrev2;
     qPrev2 = qPrev1;
-    qPrev1 = q;
-    denominators.push(q);
+    qPrev1 = qk;
   }
-  return denominators;
+  return [...new Set(denominators)];
 };
 
 // Signed drift of a period-N arm, in degrees, within (−180, 180]
@@ -88,21 +106,44 @@ const driftDegrees = (period: number, n: number): number => {
   return r / ANGLE_SCALE;
 };
 
-// The tightest arm structure this many primes can actually show: the largest
-// convergent denominator (best approximation ⇒ least drift) that still leaves
-// MIN_POINTS_PER_ARM points per arm. Null when even the coarsest doesn't fit.
-export const armStructure = (angleDelta: number, primeCount: number): ArmStructure | null => {
+// All arm families this many primes can show, best (parastichy-dominant) first.
+// Score = distance between consecutive points on one arm at the representative
+// radius: radial step 0.01·q·ln(p) + tangential step r·|drift|.
+export const armCandidates = (angleDelta: number, primeCount: number): ArmCandidate[] => {
   const n = Math.round(angleDelta * ANGLE_SCALE);
-  if (n <= 0) return null;
+  if (n <= 0 || primeCount < MIN_POINTS_PER_ARM) return [];
 
   const maxPeriod = Math.floor(primeCount / MIN_POINTS_PER_ARM);
+  const pRep = nthPrimeEstimate(Math.max(6, Math.floor(REP_FRAC * primeCount)));
+  const rRep = 0.01 * pRep;
+  const meanGap = Math.log(pRep);
 
-  let period: number | null = null;
-  for (const q of convergentDenominators(n, FULL_TURN)) {
-    if (q >= 2 && q <= maxPeriod) period = q; // later convergents approximate better
-  }
-  return period === null ? null : { period, driftDeg: driftDegrees(period, n) };
+  const toCandidate = (q: number): ArmCandidate => {
+    const driftDeg = driftDegrees(q, n);
+    const radial = 0.01 * q * meanGap;
+    const tangential = rRep * Math.abs((driftDeg * Math.PI) / 180);
+    return {
+      period: q,
+      driftDeg,
+      pointsPerArm: Math.ceil(primeCount / q),
+      score: Math.hypot(radial, tangential),
+    };
+  };
+
+  const all = semiconvergentDenominators(n, FULL_TURN)
+    .filter(q => q >= 1 && q <= maxPeriod)
+    .map(toCandidate);
+
+  const capped = all.filter(c => Math.abs(c.driftDeg) <= MAX_DRIFT_DEG);
+  // The cap only empties the list at tiny prime counts — show something anyway
+  const pool = capped.length > 0 ? capped : all;
+
+  return pool.sort((a, b) => a.score - b.score);
 };
+
+// The family the eye picks out — the parastichy-dominant candidate
+export const armStructure = (angleDelta: number, primeCount: number): ArmStructure | null =>
+  armCandidates(angleDelta, primeCount)[0] ?? null;
 
 // Maps a (index, prime) pair to scene coordinates for the active layout.
 // Index may be fractional (used to sample smooth curves between points).
@@ -306,13 +347,16 @@ export const makeMapper = (
 // known exactly (index + k·stepsPerRotation); only the prime's magnitude needs
 // predicting — `predict` is the hybrid model: globally anchored inverse
 // Riemann-R plus this arm's own shrunken offset (see src/lib/prediction.ts).
+// Also returns a dense fractional-index path along the same precessing arm so
+// the extension renders as a smooth spiral, not a chord through sparse points.
 const predictArmExtension = (
   points: ArmPoint[],
   stepsPerRotation: number,
   numPredictions: number,
-  predict: (j: number) => number
-): ArmPoint[] => {
-  if (points.length < 2) return [];
+  predict: (j: number) => number,
+  driftDeg: number
+): { predictions: ArmPoint[]; extensionPath: ArmPoint[] } => {
+  if (points.length < 2) return { predictions: [], extensionPath: [] };
 
   const lastPoint = points[points.length - 1];
   const predictions: ArmPoint[] = [];
@@ -320,15 +364,27 @@ const predictArmExtension = (
     const index = lastPoint.index + step * stepsPerRotation;
     predictions.push({ index, prime: Math.round(predict(index)) });
   }
-  return predictions;
+
+  // Adaptive sampling: an exact ray (drift 0) is a straight line — 1 sample per
+  // step; a fast-precessing arm needs more to draw the curve smoothly
+  const substeps = Math.min(8, Math.max(1, Math.ceil(Math.abs(driftDeg) / 2)));
+  const extensionPath: ArmPoint[] = [];
+  const totalSamples = numPredictions * substeps;
+  for (let s = 1; s <= totalSamples; s++) {
+    const index = lastPoint.index + (s / substeps) * stepsPerRotation;
+    extensionPath.push({ index, prime: predict(index) });
+  }
+
+  return { predictions, extensionPath };
 };
 
 // Detect spiral arms using RESIDUE CLASS grouping: arms are formed by primes
-// at indices k, k+N, k+2N, ... where N = stepsPerRotation = 360 / angleDelta
+// at indices k, k+N, k+2N, ... where N is the parastichy-dominant period
 export const detectSpiralArms = (
   primes: number[],
   stepsPerRotation: number,
-  numPredictions: number
+  numPredictions: number,
+  driftDeg: number
 ): SpiralArm[] => {
   if (primes.length < 3) return [];
 
@@ -346,11 +402,14 @@ export const detectSpiralArms = (
   armBuckets.forEach((points, armIndex) => {
     if (points.length >= 2) {
       const predict = makeArmPredictor(base, points);
-      arms.push({
-        armIndex,
+      const { predictions, extensionPath } = predictArmExtension(
         points,
-        predictions: predictArmExtension(points, stepsPerRotation, numPredictions, predict),
-      });
+        stepsPerRotation,
+        numPredictions,
+        predict,
+        driftDeg
+      );
+      arms.push({ armIndex, points, predictions, extensionPath });
     }
   });
 

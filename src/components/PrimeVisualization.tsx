@@ -5,7 +5,7 @@ import { getPrimes } from '../lib/primes';
 import { makePredictor } from '../lib/prediction';
 import { armColor, computeColors, computeDim, ColorMode, HighlightSpec, Theme } from '../lib/colors';
 import {
-  armStructure,
+  armCandidates,
   calculateAccuracy,
   detectSpiralArms,
   layoutExtent,
@@ -43,6 +43,7 @@ interface PrimeVisualizationProps {
   fibChords: boolean;
   fibLag: number;
   customFormulas: CustomFormulas;
+  armFamily: number | null; // selected arm period; null = parastichy auto
   position: { x: number; y: number; z: number };
   ref?: React.Ref<PrimeVizHandle>;
 }
@@ -98,6 +99,7 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
   fibChords,
   fibLag,
   customFormulas,
+  armFamily,
   position,
   ref,
 }) => {
@@ -142,9 +144,13 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
 
-  // The arm structure the current point count can resolve. Falls back to the
-  // naive divisor only when no convergent fits (too few primes to show any arm).
-  const structure = useMemo(() => armStructure(angleDelta, primes.length), [angleDelta, primes.length]);
+  // All arm families this data can show, parastichy-dominant first; the user
+  // can pin an alternate family via armFamily
+  const candidates = useMemo(() => armCandidates(angleDelta, primes.length), [angleDelta, primes.length]);
+  const structure = useMemo(
+    () => candidates.find(c => c.period === armFamily) ?? candidates[0] ?? null,
+    [candidates, armFamily]
+  );
   const stepsPerRotation = structure?.period ?? Math.max(1, Math.round(360 / angleDelta));
   const valueLayout = VALUE_LAYOUTS.has(layout);
   const mapper = useMemo(
@@ -182,7 +188,7 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
     const armCount = Math.min(period, Math.ceil(primes.length / 2));
     const effectivePredictionCount = Math.max(1, Math.min(predictionCount, Math.floor(6000 / Math.max(armCount, 1))));
 
-    const arms = detectSpiralArms(primes, period, effectivePredictionCount);
+    const arms = detectSpiralArms(primes, period, effectivePredictionCount, driftDeg);
 
     // ponytail: capped at the 200k-th prime — beyond that, far predictions still
     // render from the model, they just lose their green "actual" comparison
@@ -720,6 +726,29 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
       // curves would be spaghetti — draw only the predicted/actual markers there
       const drawArmCurves = !valueLayout;
 
+      // Maps a fractional-index extension sample onto the arm's VISUAL path:
+      // the angle advances by drift per period step (integer steps agree with
+      // the standard mapper mod 2π, but fractional indices through the mapper
+      // would wind through every intermediate turn and scribble across the
+      // scene). Radius/height follow the layout's own formulas.
+      const rad = (angleDelta * Math.PI) / 180;
+      const driftRad = (analysis.driftDeg * Math.PI) / 180;
+      const pLastAll = primes[primes.length - 1];
+      const zStepHelix = (6 * Math.log(pLastAll)) / Math.max(primes.length, 1);
+      const armPathVec = (anchorIndex: number, index: number, prime: number): THREE.Vector3 => {
+        const t = (index - anchorIndex) / analysis.period;
+        const theta = anchorIndex * rad + t * driftRad;
+        let r = 0.01 * prime;
+        let z = 0;
+        if (layout === 'helix') {
+          r = 1.5 * Math.log(prime);
+          z = zStepHelix * index;
+        } else if (layout === 'residual') {
+          r = 0.01 * smooth(index); // predictions ride the reference sheet (z ≈ 0)
+        }
+        return new THREE.Vector3(r * Math.cos(theta), r * Math.sin(theta), z);
+      };
+
       arms.forEach(arm => {
         const hue = armColor(arm.armIndex, analysis.period, theme);
         const armPoints = arm.points.map(p => vec(p.index, p.prime));
@@ -738,17 +767,15 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
         }
 
         if (arm.predictions.length > 0) {
-          if (drawArmCurves) {
-            // Smooth extension from the last few arm points through the predictions
-            const transitionPoints = armPoints.slice(-Math.min(3, armPoints.length));
-            arm.predictions.forEach(p => transitionPoints.push(vec(p.index, p.prime)));
-
-            const predCurvePoints =
-              transitionPoints.length >= 3
-                ? new THREE.CatmullRomCurve3(transitionPoints, false, 'catmullrom', 0.5).getPoints(transitionPoints.length * 10)
-                : transitionPoints;
+          if (drawArmCurves && arm.extensionPath.length > 0) {
+            // The extension continues the arm's precessing path smoothly
+            const anchor = arm.points[arm.points.length - 1].index;
+            const extPoints = [
+              armPoints[armPoints.length - 1],
+              ...arm.extensionPath.map(p => armPathVec(anchor, p.index, p.prime)),
+            ];
             const predLine = new THREE.Line(
-              new THREE.BufferGeometry().setFromPoints(predCurvePoints),
+              new THREE.BufferGeometry().setFromPoints(extPoints),
               new THREE.LineBasicMaterial({ color: 0xff3333, transparent: true, opacity: 0.7 })
             );
             predictionGroup.add(predLine);
