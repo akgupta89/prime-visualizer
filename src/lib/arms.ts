@@ -88,22 +88,12 @@ const driftDegrees = (period: number, n: number): number => {
   return r / ANGLE_SCALE;
 };
 
-// The original rule: assume 360/Δ arms and ignore the remainder. Correct only
-// when Δ divides 360 evenly; otherwise the arms precess by driftDeg per step.
-// Kept so the two detectors can be compared side by side.
-export const legacyArmStructure = (angleDelta: number): ArmStructure => {
-  const n = Math.round(angleDelta * ANGLE_SCALE);
-  const period = Math.max(1, Math.round(360 / angleDelta));
-  return { period, driftDeg: driftDegrees(period, n) };
-};
-
 // The tightest arm structure this many primes can actually show: the largest
 // convergent denominator (best approximation ⇒ least drift) that still leaves
 // MIN_POINTS_PER_ARM points per arm. Null when even the coarsest doesn't fit.
-export const armStructure = (angleDelta: number, primeCount: number, legacy = false): ArmStructure | null => {
+export const armStructure = (angleDelta: number, primeCount: number): ArmStructure | null => {
   const n = Math.round(angleDelta * ANGLE_SCALE);
   if (n <= 0) return null;
-  if (legacy) return legacyArmStructure(angleDelta);
 
   const maxPeriod = Math.floor(primeCount / MIN_POINTS_PER_ARM);
 

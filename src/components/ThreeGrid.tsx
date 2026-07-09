@@ -21,7 +21,6 @@ const ThreeGrid: React.FC<ThreeGridProps> = ({ width, height }) => {
   const [showConnector, setShowConnector] = useState(false);
   const [showPredictions, setShowPredictions] = useState(false);
   const [predictionCount, setPredictionCount] = useState(3);
-  const [legacyArms, setLegacyArms] = useState(false);
   const [is2D, setIs2D] = useState(false);
   const [theme, setTheme] = useState<Theme>('dark');
   const [colorMode, setColorMode] = useState<ColorMode>('arm');
@@ -79,7 +78,7 @@ const ThreeGrid: React.FC<ThreeGridProps> = ({ width, height }) => {
   // Same arm structure the visualization uses, so the legend's "index mod N"
   // matches the hues actually drawn
   const stepsPerRotation =
-    armStructure(angleDelta, primes.length, legacyArms)?.period ?? Math.max(1, Math.round(360 / angleDelta));
+    armStructure(angleDelta, primes.length)?.period ?? Math.max(1, Math.round(360 / angleDelta));
 
   return (
     <div
@@ -95,7 +94,6 @@ const ThreeGrid: React.FC<ThreeGridProps> = ({ width, height }) => {
         showConnector={showConnector}
         showPredictions={showPredictions}
         predictionCount={predictionCount}
-        legacyArms={legacyArms}
         is2D={is2D}
         theme={theme}
         colorMode={colorMode}
@@ -121,7 +119,6 @@ const ThreeGrid: React.FC<ThreeGridProps> = ({ width, height }) => {
         showConnector={showConnector}
         showPredictions={showPredictions}
         predictionCount={predictionCount}
-        legacyArms={legacyArms}
         theme={theme}
         colorMode={colorMode}
         layout={layout}
@@ -137,7 +134,6 @@ const ThreeGrid: React.FC<ThreeGridProps> = ({ width, height }) => {
         onPredictionCountChange={setPredictionCount}
         onToggleConnector={setShowConnector}
         onTogglePredictions={setShowPredictions}
-        onLegacyArmsChange={setLegacyArms}
         onToggleTheme={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))}
         onColorModeChange={setColorMode}
         onLayoutChange={setLayout}

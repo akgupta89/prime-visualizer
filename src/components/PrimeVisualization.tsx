@@ -34,7 +34,6 @@ interface PrimeVisualizationProps {
   showConnector: boolean;
   showPredictions: boolean;
   predictionCount: number;
-  legacyArms: boolean;
   is2D: boolean;
   theme: Theme;
   colorMode: ColorMode;
@@ -90,7 +89,6 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
   showConnector,
   showPredictions,
   predictionCount,
-  legacyArms,
   is2D,
   theme,
   colorMode,
@@ -146,10 +144,7 @@ const PrimeVisualization: React.FC<PrimeVisualizationProps> = ({
 
   // The arm structure the current point count can resolve. Falls back to the
   // naive divisor only when no convergent fits (too few primes to show any arm).
-  const structure = useMemo(
-    () => armStructure(angleDelta, primes.length, legacyArms),
-    [angleDelta, primes.length, legacyArms]
-  );
+  const structure = useMemo(() => armStructure(angleDelta, primes.length), [angleDelta, primes.length]);
   const stepsPerRotation = structure?.period ?? Math.max(1, Math.round(360 / angleDelta));
   const valueLayout = VALUE_LAYOUTS.has(layout);
   const mapper = useMemo(

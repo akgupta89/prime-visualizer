@@ -1,15 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ColorMode, Theme } from '../lib/colors';
-import {
-  armStructure,
-  compileFormula,
-  legacyArmStructure,
-  ArmStructure,
-  CustomFormulas,
-  CUSTOM_PRESETS,
-  Layout,
-  VALUE_LAYOUTS,
-} from '../lib/arms';
+import { armStructure, compileFormula, ArmStructure, CustomFormulas, CUSTOM_PRESETS, Layout, VALUE_LAYOUTS } from '../lib/arms';
 import {
   ChipButton,
   FineSlider,
@@ -36,7 +27,6 @@ interface SidebarProps {
   showConnector: boolean;
   showPredictions: boolean;
   predictionCount: number;
-  legacyArms: boolean;
   theme: Theme;
   colorMode: ColorMode;
   layout: Layout;
@@ -52,7 +42,6 @@ interface SidebarProps {
   onPredictionCountChange: (count: number) => void;
   onToggleConnector: (on: boolean) => void;
   onTogglePredictions: (on: boolean) => void;
-  onLegacyArmsChange: (on: boolean) => void;
   onToggleTheme: () => void;
   onColorModeChange: (mode: ColorMode) => void;
   onLayoutChange: (layout: Layout) => void;
@@ -157,7 +146,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   showConnector,
   showPredictions,
   predictionCount,
-  legacyArms,
   theme,
   colorMode,
   layout,
@@ -173,7 +161,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   onPredictionCountChange,
   onToggleConnector,
   onTogglePredictions,
-  onLegacyArmsChange,
   onToggleTheme,
   onColorModeChange,
   onLayoutChange,
@@ -207,7 +194,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   // Arms exist at every angle; which N you see depends on how many primes are on
   // screen (best rational approximation of Δ/360 that still fills each arm)
-  const arms = armStructure(angleDelta, primeCount, legacyArms);
+  const arms = armStructure(angleDelta, primeCount);
 
   // Mobile drawer touch handling
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -411,19 +398,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           </Section>
 
           <Section title="analysis">
-            <Toggle
-              id="legacyArms"
-              label="Legacy arm detector"
-              checked={legacyArms}
-              onChange={onLegacyArmsChange}
-              disabled={angleUnused}
-            />
-            {!angleUnused && (
-              <div className={`font-mono text-[10px] leading-relaxed tabular-nums ${MUTED}`}>
-                <div>legacy · {describeArms(legacyArmStructure(angleDelta))}</div>
-                <div>convergent · {describeArms(armStructure(angleDelta, primeCount))}</div>
-              </div>
-            )}
             <Toggle id="showPredictions" label="Spiral-arm predictions" checked={showPredictions} onChange={onTogglePredictions} />
             {showPredictions && (
               <div>
