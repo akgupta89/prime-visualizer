@@ -1,7 +1,6 @@
 "use client"
 
 import dynamic from 'next/dynamic';
-import Head from 'next/head';
 import { useEffect, useState } from 'react';
 
 // Import ThreeGrid dynamically to avoid SSR issues
@@ -34,18 +33,11 @@ export default function Home() {
   }, []);
 
   return (
-    <>
-      <Head>
-        <title>Prime Number Spiral Visualizer</title>
-        <meta name="description" content="Interactive 3D visualization of prime numbers in a spiral pattern" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-      </Head>
-      
-      <main className="w-screen h-screen overflow-hidden">
-        {dimensions.width > 0 && dimensions.height > 0 && (
-          <ThreeGrid width={dimensions.width} height={dimensions.height} />
-        )}
-      </main>
-    </>
+    <main className="w-screen h-screen overflow-hidden">
+      <h1 className="sr-only">Prime Visualizer — interactive 3D prime number spiral</h1>
+      {dimensions.width > 0 && dimensions.height > 0 && (
+        <ThreeGrid width={dimensions.width} height={dimensions.height} />
+      )}
+    </main>
   );
 }

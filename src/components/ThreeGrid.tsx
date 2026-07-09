@@ -1,8 +1,12 @@
-import PostponedSieve from 'fast-prime-gen';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import PrimeControls from './PrimeControls';
-import PrimeVisualization, { PredictionAccuracy } from './PrimeVisualization';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { firstPrimes } from '../lib/primes';
+import { ColorMode, HighlightSpec, Theme } from '../lib/colors';
+import { armStructure, CustomFormulas, DEFAULT_CUSTOM, Layout } from '../lib/arms';
+import Sidebar, { Residue } from './Sidebar';
+import StatsStrip from './overlays/StatsStrip';
+import Legend from './overlays/Legend';
+import ViewControls from './overlays/ViewControls';
+import PrimeVisualization, { PrimeVizHandle } from './PrimeVisualization';
 
 interface ThreeGridProps {
   width: number;
@@ -11,100 +15,79 @@ interface ThreeGridProps {
 
 const ThreeGrid: React.FC<ThreeGridProps> = ({ width, height }) => {
   const [primeCount, setPrimeCount] = useState(300);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isComputing, setIsComputing] = useState(true);
   const [position, setPosition] = useState<{ x: number; y: number; z: number }>({ x: 0, y: 0, z: 20 });
-  const [, setZoom] = useState(1);
   const [angleDelta, setAngleDelta] = useState(36);
   const [showConnector, setShowConnector] = useState(false);
   const [showPredictions, setShowPredictions] = useState(false);
   const [predictionCount, setPredictionCount] = useState(3);
+  const [legacyArms, setLegacyArms] = useState(false);
+  const [is2D, setIs2D] = useState(false);
+  const [theme, setTheme] = useState<Theme>('dark');
+  const [colorMode, setColorMode] = useState<ColorMode>('arm');
+  const [layout, setLayout] = useState<Layout>('classic');
+  const [twinSpotlight, setTwinSpotlight] = useState(false);
+  const [residue, setResidue] = useState<Residue | null>(null);
+  const [fibLens, setFibLens] = useState(false);
+  const [fibChords, setFibChords] = useState(false);
+  const [fibLag, setFibLag] = useState(8);
+  const [customFormulas, setCustomFormulas] = useState<CustomFormulas>(DEFAULT_CUSTOM);
+  const [showModelCurve, setShowModelCurve] = useState(false);
   const [primes, setPrimes] = useState<number[]>([]);
-  const controlsRef = useRef<OrbitControls | null>(null);
-  const accuracyRef = useRef<PredictionAccuracy | null>(null);
-  
+  const vizRef = useRef<PrimeVizHandle>(null);
+
+  // Sieve off the current tick so the busy chip can paint first
   useEffect(() => {
-    const sieve = PostponedSieve();
-    
-    const newPrimes: number[] = [];
-    for (let i = 0; i < primeCount; i++) {
-      const next = sieve.next();
-      if (next.done) break;
-      newPrimes.push(next.value);
-    }
-    setPrimes(newPrimes);
-    setIsLoading(false);
+    setIsComputing(true);
+    const id = setTimeout(() => {
+      setPrimes(firstPrimes(primeCount));
+      setIsComputing(false);
+    }, 0);
+    return () => clearTimeout(id);
   }, [primeCount]);
 
-  // Handle prime count change
-  const handlePrimeCountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value);
-    if (!isNaN(value) && value > 0 && value <= 100000) {
-      setPrimeCount(value);
+  // Twin spotlight, residue filter, and Fibonacci lens are mutually exclusive
+  const handleTwinSpotlight = (on: boolean) => {
+    setTwinSpotlight(on);
+    if (on) {
+      setResidue(null);
+      setFibLens(false);
+    }
+  };
+  const handleResidue = (r: Residue | null) => {
+    setResidue(r);
+    if (r) {
+      setTwinSpotlight(false);
+      setFibLens(false);
+    }
+  };
+  const handleFibLens = (on: boolean) => {
+    setFibLens(on);
+    if (on) {
+      setTwinSpotlight(false);
+      setResidue(null);
     }
   };
 
-  const handleAngleDeltaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseFloat(e.target.value);
-    if (!isNaN(value) && value > 0 && value < 180) {
-      setAngleDelta(value);
-    }
-  };
+  const highlight = useMemo<HighlightSpec>(() => {
+    if (residue) return { type: 'residue', q: residue.q, a: residue.a };
+    if (twinSpotlight) return { type: 'twins' };
+    if (fibLens) return { type: 'fibonacci' };
+    return { type: 'none' };
+  }, [residue, twinSpotlight, fibLens]);
 
-  const handleResetCamera = () => {
-    setPosition({ x: 0, y: 0, z: 20 });
-    setZoom(1);
-    if (controlsRef.current) {
-      controlsRef.current.target.set(0, 0, 0);
-      controlsRef.current.update();
-    }
-  };
-
-  // Handle connector toggle
-  const handleToggleConnector = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setShowConnector(e.target.checked);
-  };
-
-  // Handle predictions toggle
-  const handleTogglePredictions = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setShowPredictions(e.target.checked);
-  };
-
-  // Handle prediction count change
-  const handlePredictionCountChange = (e: React.ChangeEvent<HTMLInputElement> | React.FormEvent<HTMLInputElement>) => {
-    const target = e.target as HTMLInputElement;
-    const value = parseInt(target.value);
-    if (!isNaN(value) && value >= 1 && value <= 20) {
-      setPredictionCount(value);
-    }
-  };
-
-  // Handle accuracy updates from visualization
-  const handleAccuracyUpdate = useCallback((accuracy: PredictionAccuracy) => {
-    accuracyRef.current = accuracy;
-  }, []);
-
-  if (isLoading) {
-    return <div>Loading...</div>;
-  }
+  // Same arm structure the visualization uses, so the legend's "index mod N"
+  // matches the hues actually drawn
+  const stepsPerRotation =
+    armStructure(angleDelta, primes.length, legacyArms)?.period ?? Math.max(1, Math.round(360 / angleDelta));
 
   return (
-    <div className="flex flex-col md:flex-row w-full h-full">
-      <PrimeControls
-        primeCount={primeCount}
-        isLoading={isLoading}
-        angleDelta={angleDelta}
-        showConnector={showConnector}
-        showPredictions={showPredictions}
-        predictionCount={predictionCount}
-        onPrimeCountChange={handlePrimeCountChange}
-        onAngleDeltaChange={handleAngleDeltaChange}
-        onPredictionCountChange={handlePredictionCountChange}
-        onUpdatePrimes={(count) => setPrimeCount(count)}
-        onResetCamera={handleResetCamera}
-        onToggleConnector={handleToggleConnector}
-        onTogglePredictions={handleTogglePredictions}
-      />
+    <div
+      data-theme={theme}
+      className={`relative h-full w-full ${theme === 'dark' ? 'bg-[#050810]' : 'bg-[#f4f6f8]'}`}
+    >
       <PrimeVisualization
+        ref={vizRef}
         width={width}
         height={height}
         primes={primes}
@@ -112,13 +95,63 @@ const ThreeGrid: React.FC<ThreeGridProps> = ({ width, height }) => {
         showConnector={showConnector}
         showPredictions={showPredictions}
         predictionCount={predictionCount}
-        setPosition={setPosition}
-        setZoom={setZoom}
+        legacyArms={legacyArms}
+        is2D={is2D}
+        theme={theme}
+        colorMode={colorMode}
+        layout={layout}
+        highlight={highlight}
+        showModelCurve={showModelCurve}
+        fibChords={fibChords}
+        fibLag={fibLag}
+        customFormulas={customFormulas}
         position={position}
-        onAccuracyUpdate={handleAccuracyUpdate}
+      />
+      <StatsStrip primes={primes} isComputing={isComputing} />
+      <ViewControls
+        is2D={is2D}
+        onToggle2D={() => setIs2D(v => !v)}
+        onResetCamera={() => setPosition({ x: 0, y: 0, z: 20 })}
+      />
+      <Legend colorMode={colorMode} theme={theme} primes={primes} stepsPerRotation={stepsPerRotation} />
+      <Sidebar
+        primeCount={primeCount}
+        isComputing={isComputing}
+        angleDelta={angleDelta}
+        showConnector={showConnector}
+        showPredictions={showPredictions}
+        predictionCount={predictionCount}
+        legacyArms={legacyArms}
+        theme={theme}
+        colorMode={colorMode}
+        layout={layout}
+        twinSpotlight={twinSpotlight}
+        residue={residue}
+        fibLens={fibLens}
+        fibChords={fibChords}
+        fibLag={fibLag}
+        showModelCurve={showModelCurve}
+        customFormulas={customFormulas}
+        onPrimeCountCommit={setPrimeCount}
+        onAngleDeltaChange={setAngleDelta}
+        onPredictionCountChange={setPredictionCount}
+        onToggleConnector={setShowConnector}
+        onTogglePredictions={setShowPredictions}
+        onLegacyArmsChange={setLegacyArms}
+        onToggleTheme={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))}
+        onColorModeChange={setColorMode}
+        onLayoutChange={setLayout}
+        onTwinSpotlightChange={handleTwinSpotlight}
+        onResidueChange={handleResidue}
+        onFibLensChange={handleFibLens}
+        onFibChordsChange={setFibChords}
+        onFibLagChange={setFibLag}
+        onModelCurveChange={setShowModelCurve}
+        onCustomFormulasChange={setCustomFormulas}
+        onExport={() => vizRef.current?.exportPNG()}
       />
     </div>
   );
 };
 
-export default ThreeGrid; 
+export default ThreeGrid;
