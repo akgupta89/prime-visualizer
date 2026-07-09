@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { firstPrimes } from '../lib/primes';
 import { ColorMode, HighlightSpec, Theme } from '../lib/colors';
-import { armStructure, CustomFormulas, DEFAULT_CUSTOM, Layout } from '../lib/arms';
+import { armCandidates, CustomFormulas, DEFAULT_CUSTOM, Layout } from '../lib/arms';
 import Sidebar, { Residue } from './Sidebar';
 import StatsStrip from './overlays/StatsStrip';
 import Legend from './overlays/Legend';
@@ -31,6 +31,7 @@ const ThreeGrid: React.FC<ThreeGridProps> = ({ width, height }) => {
   const [fibChords, setFibChords] = useState(false);
   const [fibLag, setFibLag] = useState(8);
   const [customFormulas, setCustomFormulas] = useState<CustomFormulas>(DEFAULT_CUSTOM);
+  const [armFamily, setArmFamily] = useState<number | null>(null); // null = parastichy auto
   const [showModelCurve, setShowModelCurve] = useState(false);
   const [primes, setPrimes] = useState<number[]>([]);
   const vizRef = useRef<PrimeVizHandle>(null);
@@ -77,8 +78,14 @@ const ThreeGrid: React.FC<ThreeGridProps> = ({ width, height }) => {
 
   // Same arm structure the visualization uses, so the legend's "index mod N"
   // matches the hues actually drawn
-  const stepsPerRotation =
-    armStructure(angleDelta, primes.length)?.period ?? Math.max(1, Math.round(360 / angleDelta));
+  const candidates = useMemo(() => armCandidates(angleDelta, primes.length), [angleDelta, primes.length]);
+  const resolvedArm = candidates.find(c => c.period === armFamily) ?? candidates[0] ?? null;
+  const stepsPerRotation = resolvedArm?.period ?? Math.max(1, Math.round(360 / angleDelta));
+
+  // A pinned family is meaningless once the angle or data changes
+  useEffect(() => {
+    setArmFamily(null);
+  }, [angleDelta, primeCount]);
 
   return (
     <div
@@ -103,6 +110,7 @@ const ThreeGrid: React.FC<ThreeGridProps> = ({ width, height }) => {
         fibChords={fibChords}
         fibLag={fibLag}
         customFormulas={customFormulas}
+        armFamily={armFamily}
         position={position}
       />
       <StatsStrip primes={primes} isComputing={isComputing} />
@@ -129,6 +137,9 @@ const ThreeGrid: React.FC<ThreeGridProps> = ({ width, height }) => {
         fibLag={fibLag}
         showModelCurve={showModelCurve}
         customFormulas={customFormulas}
+        candidates={candidates}
+        armFamily={armFamily}
+        onArmFamilyChange={setArmFamily}
         onPrimeCountCommit={setPrimeCount}
         onAngleDeltaChange={setAngleDelta}
         onPredictionCountChange={setPredictionCount}

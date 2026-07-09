@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ColorMode, Theme } from '../lib/colors';
-import { armStructure, compileFormula, ArmStructure, CustomFormulas, CUSTOM_PRESETS, Layout, VALUE_LAYOUTS } from '../lib/arms';
+import { compileFormula, ArmCandidate, ArmStructure, CustomFormulas, CUSTOM_PRESETS, Layout, VALUE_LAYOUTS } from '../lib/arms';
 import {
   ChipButton,
   FineSlider,
@@ -37,6 +37,9 @@ interface SidebarProps {
   fibLag: number;
   showModelCurve: boolean;
   customFormulas: CustomFormulas;
+  candidates: ArmCandidate[];
+  armFamily: number | null;
+  onArmFamilyChange: (period: number | null) => void;
   onPrimeCountCommit: (count: number) => void;
   onAngleDeltaChange: (deg: number) => void;
   onPredictionCountChange: (count: number) => void;
@@ -93,9 +96,17 @@ const RESIDUE_CLASSES: Record<number, number[]> = {
 
 const describeArms = (arms: ArmStructure | null): string => {
   if (!arms) return 'too few primes to resolve an arm';
+  if (arms.period === 1) return `single spiral — ${arms.driftDeg.toFixed(2)}°/step`;
   if (arms.driftDeg === 0) return `${arms.period} arms — exact rays`;
   const sign = arms.driftDeg > 0 ? '+' : '';
   return `${arms.period} arms — precessing ${sign}${arms.driftDeg.toFixed(2)}°/step`;
+};
+
+// Compact chip label for one arm family
+const familyLabel = (c: ArmCandidate): string => {
+  if (c.period === 1) return '1 spiral';
+  if (c.driftDeg === 0) return `${c.period} rays`;
+  return `${c.period} · ${c.driftDeg > 0 ? '+' : ''}${c.driftDeg.toFixed(1)}°`;
 };
 
 const SecondaryButton: React.FC<{ onClick: () => void; children: React.ReactNode }> = ({ onClick, children }) => (
@@ -156,6 +167,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   fibLag,
   showModelCurve,
   customFormulas,
+  candidates,
+  armFamily,
+  onArmFamilyChange,
   onPrimeCountCommit,
   onAngleDeltaChange,
   onPredictionCountChange,
@@ -194,7 +208,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   // Arms exist at every angle; which N you see depends on how many primes are on
   // screen (best rational approximation of Δ/360 that still fills each arm)
-  const arms = armStructure(angleDelta, primeCount);
+  const arms = candidates.find(c => c.period === armFamily) ?? candidates[0] ?? null;
 
   // Mobile drawer touch handling
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -398,6 +412,26 @@ const Sidebar: React.FC<SidebarProps> = ({
           </Section>
 
           <Section title="analysis">
+            {!angleUnused && candidates.length > 1 && (
+              <div>
+                <div className={`${LABEL} mb-1 normal-case tracking-normal`}>Arm family</div>
+                <div className="flex flex-wrap gap-1">
+                  <ChipButton active={armFamily === null} onClick={() => onArmFamilyChange(null)} title="Parastichy-dominant family (what the eye picks out)">
+                    Auto
+                  </ChipButton>
+                  {candidates.slice(0, 4).map(c => (
+                    <ChipButton
+                      key={c.period}
+                      active={armFamily === c.period}
+                      onClick={() => onArmFamilyChange(c.period)}
+                      title={`${c.pointsPerArm} points per arm`}
+                    >
+                      {familyLabel(c)}
+                    </ChipButton>
+                  ))}
+                </div>
+              </div>
+            )}
             <Toggle id="showPredictions" label="Spiral-arm predictions" checked={showPredictions} onChange={onTogglePredictions} />
             {showPredictions && (
               <div>
