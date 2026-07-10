@@ -13,11 +13,29 @@ npm run dev
 
 Open the URL printed in your terminal.
 
+## The vector walk
+
+The classic view draws each prime as a **vector**: the prime is the magnitude, and the angle delta gives the direction. Lay the arrows head to tail — prime 2 pointing along 0·Δ, prime 3 along 1·Δ, prime 5 along 2·Δ — and the patterns emerge from where the walk lands.
+
+<img src="docs/example.svg" alt="Primes drawn as vectors laid head to tail">
+
+The renderer never accumulates anything. It places the n-th prime directly at radius `0.01·p` and angle `n·Δ`, an O(1) closed form with no prefix pass, no state, and support for fractional indices (which the arm-extension curves rely on). The two agree because of **Abel summation**: for a sum `Σ aₖ·zₖ` with `|z| = 1` and `aₖ` slowly varying, the partial sum is dominated by its final term,
+
+```
+Sₙ  ≈  aₙ·zⁿ · 1/(1 − z⁻¹)
+```
+
+Primes grow smoothly enough (`pₙ ~ n·ln n`) to qualify, so the entire accumulated history of the walk collapses into a single constant complex factor. Dividing the walk's position by the rendered position converges to exactly that constant — at Δ ≈ 1 rad, a magnitude of 1.0429 and a phase of −61.35°. **The walk is the rendered spiral, scaled 4% and rotated 61°** — a similarity transform, and therefore invisible through a camera you can orbit.
+
+This is what makes the arms real rather than an artifact of drawing order. They survive because the walk and the closed form are the same picture.
+
+It does not carry over to the value-mapped layouts. **π spiral** sets θ = p, so consecutive angles lurch by the prime gap (2, 4, 6 radians) instead of stepping by a fixed Δ. The phase is not slowly varying, Abel summation does not apply, and there is no walk interpretation — which is why it renders nothing like the classic view despite sharing the same radius.
+
 ## Layouts
 
 **Index-mapped** — the n-th prime is placed by its position in the sequence:
 
-- **Classic** — polar spiral: angle = index · Δ, radius ∝ prime. With N = 360/Δ an integer, every N-th prime shares a ray, forming the "spiral arms" (residue classes of the index). For non-divisor angles the arms the eye picks out correspond to continued-fraction convergents of Δ/360 — at the golden angle those are Fibonacci numbers, which is why a sunflower shows 34/55/89 spirals.
+- **Classic** — the vector walk (see below): angle = index · Δ, radius ∝ prime. With N = 360/Δ an integer, every N-th prime shares a ray, forming the "spiral arms" (residue classes of the index). For non-divisor angles the arms the eye picks out correspond to continued-fraction convergents of Δ/360 — at the golden angle those are Fibonacci numbers, which is why a sunflower shows 34/55/89 spirals.
 - **Residual 3D** — radius follows the *smooth* inverse Riemann-R curve (a pure function of index), so predicted positions are exact by construction; each prime's deviation from the curve becomes the z-axis. The irreducible "noise" of the primes reads as a rippled sheet.
 - **Helix 3D** — index as height, log radius: arms become helical strands.
 
