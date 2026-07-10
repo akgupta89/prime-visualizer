@@ -147,6 +147,11 @@ export const armStructure = (angleDelta: number, primeCount: number): ArmStructu
 
 // Maps a (index, prime) pair to scene coordinates for the active layout.
 // Index may be fractional (used to sample smooth curves between points).
+//
+// Writes Cartesian xyz into `out` — every layout converts polar (r, θ) to
+// Cartesian on the way out, so (r, θ) is only ever a local intermediate and is
+// never stored. Nothing reads a position back as an angle; picking recovers the
+// prime by buffer index. Ulam is the exception that skips polar entirely.
 export type MapFn = (index: number, prime: number, out: Float32Array | number[], offset: number) => void;
 
 // ---- User-editable formula layout ----
