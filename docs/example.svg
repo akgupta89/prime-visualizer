@@ -1,60 +1,108 @@
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" preserveAspectRatio="xMidYMid" width="300" height="300" viewBox="0 0 300 300">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 402" width="780" height="402" role="img" aria-labelledby="ttl">
+  <title id="ttl">Primes drawn as vectors laid head to tail, each turned 36 degrees from the last. After sixty primes the walk traces a spiral.</title>
+  <style>
+    svg { --ink:#1f2328; --mark:#cf222e; --line:#116329; --muted:#59636e; --surface:#ffffff; --border:#d1d9e0; --code:#0969da; }
+    @media (prefers-color-scheme: dark) {
+      svg { --ink:#e6edf3; --mark:#ff7b72; --line:#56d364; --muted:#9198a1; --surface:#0d1117; --border:#30363d; --code:#58a6ff; }
+    }
+    .bg   { fill:var(--surface); stroke:var(--border); stroke-width:1; }
+    .vec  { stroke:var(--line); stroke-width:2; stroke-linecap:round; }
+    .arc  { stroke:var(--muted); stroke-width:1; fill:none; opacity:.75; }
+    .tail { stroke:var(--line); stroke-width:1.1; fill:none; opacity:.7; stroke-linejoin:round; stroke-linecap:round; }
+    .dot  { fill:var(--ink); }
+    .seed { fill:var(--mark); }
+    text  { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; }
+    .p     { fill:var(--ink);   font-size:13.5px; font-weight:600; text-anchor:middle; }
+    .delta { fill:var(--muted); font-size:11px; text-anchor:middle; }
+    .sym   { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; fill:var(--code); font-weight:600; }
+    .cap   { fill:var(--muted); font-size:12.5px; text-anchor:middle; }
+    .mono  { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; fill:var(--code); font-weight:600; }
+    .em    { font-style:italic; fill:var(--ink); }
+  </style>
   <defs>
-    <style>
-      .cls-1 {
-        fill: #000;
-      }
-
-      .cls-1, .cls-2, .cls-3, .cls-4, .cls-5 {
-        fill-rule: evenodd;
-      }
-
-      .cls-2 {
-        fill: #00a651;
-        opacity: 0.5;
-      }
-
-      .cls-3, .cls-8 {
-        fill: #2857a8;
-      }
-
-      .cls-4, .cls-9 {
-        fill: #9e005d;
-      }
-
-      .cls-10, .cls-5 {
-        fill: #ed1c24;
-      }
-
-      .cls-10, .cls-6, .cls-7, .cls-8, .cls-9 {
-        font-size: 16px;
-      }
-
-      .cls-10, .cls-7, .cls-8, .cls-9 {
-        text-anchor: middle;
-      }
-
-      .cls-7 {
-        font-family: "Arial";
-      }
-
-      .cls-10, .cls-8, .cls-9 {
-        font-family: "Arial-BoldMT";
-        font-weight: bold;
-      }
-    </style>
+    <marker id="h" viewBox="0 0 10 8" refX="9" refY="4" markerWidth="6" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,4 L0,8 z" fill="var(--line)"/></marker>
   </defs>
-  <path d="M418.000,276.000 L153.000,276.000 L153.000,479.000 L152.000,479.000 L152.000,276.000 L-118.000,276.000 L-118.000,275.000 L152.000,275.000 L152.000,1.000 L153.000,1.000 L153.000,275.000 L418.000,275.000 L418.000,276.000 Z" class="cls-1"/>
-  <path d="M154.000,275.000 C154.000,275.000 177.000,275.000 204.000,275.000 C204.000,261.855 198.881,249.901 190.519,241.004 C159.236,272.144 154.000,275.000 154.000,275.000 Z" class="cls-2"/>
-  <path d="M154.746,276.789 L151.254,273.211 L183.307,241.940 L180.688,239.255 L194.000,235.000 L189.417,248.203 L186.799,245.519 L154.746,276.789 Z" class="cls-3"/>
-  <path d="M193.343,234.698 C193.343,234.698 209.607,218.435 228.698,199.343 C219.404,190.048 207.331,185.215 195.127,184.837 C195.026,228.977 193.343,234.698 193.343,234.698 Z" class="cls-2"/>
-  <path d="M196.000,235.000 L191.000,235.000 L191.000,169.500 L187.250,169.500 L193.500,157.000 L199.750,169.500 L196.000,169.500 L196.000,235.000 Z" class="cls-4"/>
-  <path d="M192.438,159.364 C192.438,159.364 192.728,136.365 193.068,109.368 C179.924,109.202 167.906,114.170 158.905,122.419 C189.648,154.092 192.438,159.364 192.438,159.364 Z" class="cls-2"/>
-  <path d="M194.768,155.232 L191.232,158.768 L122.071,89.607 L119.419,92.258 L115.000,79.000 L128.258,83.419 L125.607,86.071 L194.768,155.232 Z" class="cls-5"/>
-  <text x="188" y="269" class="cls-6"><tspan x="188" class="cls-7">45°</tspan></text>
-  <text x="211" y="206" class="cls-6"><tspan x="211" class="cls-7">45°</tspan></text>
-  <text x="181" y="128" class="cls-6"><tspan x="181" class="cls-7">45°</tspan></text>
-  <text x="162" y="251" class="cls-6"><tspan x="162" class="cls-8">2</tspan></text>
-  <text x="180" y="201" class="cls-6"><tspan x="180" class="cls-9">3</tspan></text>
-  <text x="140" y="134" class="cls-6"><tspan x="140" class="cls-10">5</tspan></text>
+  <rect class="bg" x="0.5" y="0.5" width="779" height="401" rx="10"/>
+  <circle class="dot" cx="164.98" cy="294" r="3"/>
+  <path class="arc" d="M224.27,294 A32,32 0 0 0 218.16,275.19"/>
+  <text class="delta" x="245.53" y="280.7"><tspan class="sym">Δ</tspan> = 36°</text>
+  <line class="vec" x1="164.98" y1="294" x2="181.27" y2="294" marker-end="url(#h)"/>
+  <text class="p" x="178.63" y="313">2</text>
+  <line class="vec" x1="192.27" y1="294" x2="216.49" y2="276.41" marker-end="url(#h)"/>
+  <text class="p" x="198.84" y="273.22">3</text>
+  <line class="vec" x1="225.39" y1="269.94" x2="243.07" y2="215.52" marker-end="url(#h)"/>
+  <text class="p" x="219.76" y="237.25">5</text>
+  <line class="vec" x1="246.47" y1="205.06" x2="220.35" y2="124.68" marker-end="url(#h)"/>
+  <text class="p" x="215.54" y="169.89">7</text>
+  <line class="vec" x1="216.96" y1="114.22" x2="104.43" y2="32.47" marker-end="url(#h)"/>
+  <text class="p" x="146.25" y="88.86">11</text>
+  <circle class="seed" cx="192.27" cy="294" r="3.2"/>
+  <circle class="seed" cx="225.39" cy="269.94" r="3.2"/>
+  <circle class="seed" cx="246.47" cy="205.06" r="3.2"/>
+  <circle class="seed" cx="216.96" cy="114.22" r="3.2"/>
+  <circle class="seed" cx="95.53" cy="26" r="3.2"/>
+  <path class="tail" d="M596.16,152.28 L596.79,152.28 L597.56,151.72 L598.05,150.22 L597.37,148.1 L594.54,146.05 L590.42,146.05 L586.05,149.22 L584.19,154.96 L586.45,161.9 L593.89,167.31 L603.73,167.31 L613.23,160.41 L617.25,148.03 L613.03,135.05 L600.97,126.29 L584.15,126.29 L569,137.29 L563.02,155.7 L569.59,175.93 L587.82,189.17 L610.98,189.17 L631.27,174.43 L639.41,149.38 L630.68,122.52 L605.77,104.42 L573.72,104.42 L547.27,123.64 L536.78,155.93 L547.47,188.83 L576.48,209.91 L616.79,209.91 L650.42,185.48 L663.86,144.12 L650.23,102.17 L611.97,74.38 L564.05,74.38 L523.74,103.66 L507.75,152.86 L524.13,203.27 L568.55,235.54 L625.36,235.54 L671.83,201.77 L690.56,144.12 L671.63,85.87 L621.05,49.12 L557.9,49.12 L503.72,88.48 L481.85,155.79 L504.12,224.31 L562.91,267.02 L636.86,267.02 L698.22,222.44 L721.86,149.7 L697.24,73.94 L631.25,26 L547.79,26 L478.72,76.18 L452.14,157.98 L479.31,241.58 L551.46,294"/>
+  <circle class="seed" cx="598.05" cy="150.22" r="2"/>
+  <circle class="seed" cx="597.37" cy="148.1" r="2"/>
+  <circle class="seed" cx="594.54" cy="146.05" r="2"/>
+  <circle class="seed" cx="590.42" cy="146.05" r="2"/>
+  <circle class="seed" cx="586.05" cy="149.22" r="2"/>
+  <circle class="seed" cx="584.19" cy="154.96" r="2"/>
+  <circle class="seed" cx="586.45" cy="161.9" r="2"/>
+  <circle class="seed" cx="593.89" cy="167.31" r="2"/>
+  <circle class="seed" cx="603.73" cy="167.31" r="2"/>
+  <circle class="seed" cx="613.23" cy="160.41" r="2"/>
+  <circle class="seed" cx="617.25" cy="148.03" r="2"/>
+  <circle class="seed" cx="613.03" cy="135.05" r="2"/>
+  <circle class="seed" cx="600.97" cy="126.29" r="2"/>
+  <circle class="seed" cx="584.15" cy="126.29" r="2"/>
+  <circle class="seed" cx="569" cy="137.29" r="2"/>
+  <circle class="seed" cx="563.02" cy="155.7" r="2"/>
+  <circle class="seed" cx="569.59" cy="175.93" r="2"/>
+  <circle class="seed" cx="587.82" cy="189.17" r="2"/>
+  <circle class="seed" cx="610.98" cy="189.17" r="2"/>
+  <circle class="seed" cx="631.27" cy="174.43" r="2"/>
+  <circle class="seed" cx="639.41" cy="149.38" r="2"/>
+  <circle class="seed" cx="630.68" cy="122.52" r="2"/>
+  <circle class="seed" cx="605.77" cy="104.42" r="2"/>
+  <circle class="seed" cx="573.72" cy="104.42" r="2"/>
+  <circle class="seed" cx="547.27" cy="123.64" r="2"/>
+  <circle class="seed" cx="536.78" cy="155.93" r="2"/>
+  <circle class="seed" cx="547.47" cy="188.83" r="2"/>
+  <circle class="seed" cx="576.48" cy="209.91" r="2"/>
+  <circle class="seed" cx="616.79" cy="209.91" r="2"/>
+  <circle class="seed" cx="650.42" cy="185.48" r="2"/>
+  <circle class="seed" cx="663.86" cy="144.12" r="2"/>
+  <circle class="seed" cx="650.23" cy="102.17" r="2"/>
+  <circle class="seed" cx="611.97" cy="74.38" r="2"/>
+  <circle class="seed" cx="564.05" cy="74.38" r="2"/>
+  <circle class="seed" cx="523.74" cy="103.66" r="2"/>
+  <circle class="seed" cx="507.75" cy="152.86" r="2"/>
+  <circle class="seed" cx="524.13" cy="203.27" r="2"/>
+  <circle class="seed" cx="568.55" cy="235.54" r="2"/>
+  <circle class="seed" cx="625.36" cy="235.54" r="2"/>
+  <circle class="seed" cx="671.83" cy="201.77" r="2"/>
+  <circle class="seed" cx="690.56" cy="144.12" r="2"/>
+  <circle class="seed" cx="671.63" cy="85.87" r="2"/>
+  <circle class="seed" cx="621.05" cy="49.12" r="2"/>
+  <circle class="seed" cx="557.9" cy="49.12" r="2"/>
+  <circle class="seed" cx="503.72" cy="88.48" r="2"/>
+  <circle class="seed" cx="481.85" cy="155.79" r="2"/>
+  <circle class="seed" cx="504.12" cy="224.31" r="2"/>
+  <circle class="seed" cx="562.91" cy="267.02" r="2"/>
+  <circle class="seed" cx="636.86" cy="267.02" r="2"/>
+  <circle class="seed" cx="698.22" cy="222.44" r="2"/>
+  <circle class="seed" cx="721.86" cy="149.7" r="2"/>
+  <circle class="seed" cx="697.24" cy="73.94" r="2"/>
+  <circle class="seed" cx="631.25" cy="26" r="2"/>
+  <circle class="seed" cx="547.79" cy="26" r="2"/>
+  <circle class="seed" cx="478.72" cy="76.18" r="2"/>
+  <circle class="seed" cx="452.14" cy="157.98" r="2"/>
+  <circle class="seed" cx="479.31" cy="241.58" r="2"/>
+  <circle class="seed" cx="551.46" cy="294" r="2"/>
+  <circle class="dot" cx="596.16" cy="152.28" r="3"/>
+  <text class="cap" x="171" y="342">Each prime is a vector: length <tspan class="mono">p</tspan>, direction <tspan class="mono">i·Δ</tspan>.</text>
+  <text class="cap" x="171" y="361">Lay them head to tail.</text>
+  <text class="cap" x="587" y="342">Sixty primes on, the walk <tspan class="em">is</tspan> the spiral —</text>
+  <text class="cap" x="587" y="361">the one the renderer draws in closed form.</text>
 </svg>
