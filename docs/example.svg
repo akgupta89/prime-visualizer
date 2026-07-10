@@ -1,10 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 402" width="780" height="402" role="img" aria-labelledby="ttl">
   <title id="ttl">Primes drawn as vectors laid head to tail, each turned 36 degrees from the last. After sixty primes the walk traces a spiral.</title>
   <style>
+    /* Deliberately NOT theme-aware. An SVG's prefers-color-scheme follows the
+       viewer's OS, but the page embedding it follows the GitHub (or editor)
+       theme, and the two disagree freely -- OS dark + GitHub light painted a
+       dark figure onto a white page. One light surface, drawn by the figure
+       itself, is legible on every background. All colours below are
+       contrast-checked against #ffffff. */
     svg { --ink:#1f2328; --mark:#cf222e; --line:#116329; --muted:#59636e; --surface:#ffffff; --border:#d1d9e0; --code:#0969da; }
-    @media (prefers-color-scheme: dark) {
-      svg { --ink:#e6edf3; --mark:#ff7b72; --line:#56d364; --muted:#9198a1; --surface:#0d1117; --border:#30363d; --code:#58a6ff; }
-    }
     .bg   { fill:var(--surface); stroke:var(--border); stroke-width:1; }
     .vec  { stroke:var(--line); stroke-width:2; stroke-linecap:round; }
     .arc  { stroke:var(--muted); stroke-width:1; fill:none; opacity:.75; }
