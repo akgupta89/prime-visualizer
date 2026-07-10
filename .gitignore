@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Vestigial: CI installs via `npm ci` from package-lock.json
+yarn.lock
